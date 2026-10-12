@@ -1,5 +1,5 @@
 {
-  "description": "kemory-plus: Kemory inside Claude Code. A function-hooks module (register.tsx, Claude Code 2.1.267+) draws the status line, the band above the prompt, transcript cards and the /kemory-plus:memories panel; older builds and Grok ignore it. The PreToolUse hook auto-approves read-only Kemory tools so recall costs no permission prompt; writes still ask. It must stay synchronous: an async hook's output is discarded. Requires the kemory plugin, whose MCP server and scripts it uses.",
+  "description": "kemory-panel: Kemory inside Claude Code. A function-hooks module (register.tsx, Claude Code 2.1.267+) draws the status line, the band above the prompt, transcript cards and the /kemory-panel:memories panel; older builds and Grok ignore it. The PreToolUse hook auto-approves read-only Kemory tools so recall costs no permission prompt; writes still ask. It must stay synchronous: an async hook's output is discarded. Requires the kemory plugin, whose MCP server and scripts it uses.",
   "modules": [
     "./register.tsx"
   ],

@@ -1,9 +1,20 @@
 # Changelog
 
-kemory-plus moved here from the `plus/` folder of
+This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/` folder of
 [kemory-plugin](https://github.com/SeKondBrainAILabs/kemory-plugin), whose
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
+
+## [0.15.0]
+
+### Changed
+- **Renamed from `kemory-plus` to `kemory-panel`.** "Plus" read like a paid
+  tier; the plugin is free and is Kemory's interface in Claude Code. The
+  commands are now `/kemory-panel:memories`, `/kemory-panel:remember` and
+  `/kemory-panel:learned`, and the repository is
+  [kemory-panel](https://github.com/SeKondBrainAILabs/kemory-panel) (the old
+  URL redirects). To switch, run `/plugin uninstall kemory-plus@kemory`, then
+  `/plugin install kemory-panel@kemory`.
 
 ## [0.14.1]
 
