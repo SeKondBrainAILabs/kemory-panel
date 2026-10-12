@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SeKondBrainAILabs/kemory-panel/blob/main/SECURITY.md
+    about: Do not open a public issue. Report privately to security@sekondbrain.ai.
+  - name: Recall, capture, login or the MCP server
+    url: https://github.com/SeKondBrainAILabs/kemory-plugin/issues
+    about: Those come from the kemory plugin, not this one.
+  - name: Kemory service, API or account
+    url: https://docs.sekondbrain.ai/kemory/
+    about: Anything about Kemory itself belongs in the docs or with support.
