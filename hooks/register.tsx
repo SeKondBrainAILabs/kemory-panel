@@ -591,11 +591,13 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // After a quiet spell with enough new turns, propose memories unasked.
+  // Opt-in (KEMORY_AUTO_SUGGEST=1): each run is a model call over the session
+  // that the person did not ask for. /kemory-plus:learned runs it on request.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     turnsSinceSuggestion += 1
     idleTimer?.cancel()
+    if ((await $.env.get('KEMORY_AUTO_SUGGEST')) !== '1') return result
     if (turnsSinceSuggestion >= MIN_TURNS_FOR_SUGGESTIONS) {
       idleTimer = $.clock.after(IDLE_MS, () => void suggest($, false))
     }
