@@ -37,7 +37,7 @@ const CONNECTOR_PROMPT_CHECKS = 3
 const NAMESPACE = 'shared'
 // The repo brief shows only strong matches: a folder name alone is a weak query,
 // and below this a search returns whatever happens to be nearest.
-const BRIEF_MIN_SIMILARITY = 0.55
+const BRIEF_MIN_SIMILARITY = 0.65
 // Automatic session summaries say what a session was about, not what is true.
 const BRIEF_SKIP_NAMESPACE = /^user:sessions/
 const IDLE_MS = 5 * 60 * 1000
@@ -516,7 +516,7 @@ function dashboardLink(namespace: string): string {
 function verb(e: Entry): string {
   if (e.isDeleted) return 'Deleted'
 
-  return { saved: 'Saved', updated: 'Updated', recalled: 'Recalled', brief: 'About this repo' }[e.kind]
+  return { saved: 'Saved', updated: 'Updated', recalled: 'Recalled', brief: 'Repo' }[e.kind]
 }
 
 // The SeKondBrain mark, drawn where the surface takes SVG.
@@ -555,9 +555,13 @@ function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
       paddingX={1}
       marginY={0}
     >
+      {/* Label and tag on their own line, the title under them: on one line a
+          long namespace squeezed the label into a column and cut the title. */}
       <Box gap={1}>
         <Text color={m.isDeleted ? BRAND.grey : ACCENT}>{verb(m).toUpperCase()}</Text>
         {tag(Text, m.namespace)}
+      </Box>
+      <Box>
         <Button
           key={`open-${at}-${m.key}`}
           plain

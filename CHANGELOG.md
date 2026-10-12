@@ -5,6 +5,19 @@ kemory-plus moved here from the `plus/` folder of
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.14.1]
+
+### Fixed
+- A card's header no longer wraps. The label, the namespace tag and the title
+  shared one line, so a long namespace squeezed the label into a column and
+  cut the title off. The title now has a line of its own, and the repo brief's
+  label is `REPO` instead of `ABOUT THIS REPO`.
+
+### Changed
+- The repo brief shows a memory only at 0.65 similarity or above, up from
+  0.55. A weak match, such as a note that someone once connected to Kemory,
+  no longer appears as something Kemory knows about the repo.
+
 ## [0.14.0]
 
 ### Fixed

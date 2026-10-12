@@ -217,3 +217,58 @@ test('a save made while the server is still connecting is tried again', async ($
   expect(calls).toBe(2)
   expect(await ui.find({ text: /SAVED 1/ })).toBeTruthy()
 })
+
+const recallOf = (memories: { id: string; ns: string; text: string; score: number }[]) => ({
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({
+        memories: memories.map(m => ({ memory_id: m.id, namespace: m.ns, content: m.text, similarity_score: m.score })),
+      }),
+    },
+  ],
+  isError: false,
+})
+
+test('the repo brief keeps strong matches only, each card with its title on a line of its own', async ($, on) => {
+  mock.env(on, {})
+  on('ui.status', () => answer())
+  on('ui.toast', () => answer())
+  on('tool.list', () => answer([]))
+  on('process.run', () => answer({ stdout: '200', stderr: '', code: 0 }))
+  on('session.root', () => answer('/Users/k/src/kemory-plugin'))
+  on('mcp.call', (_$, e) =>
+    answer(
+      e.tool === 'kemory_recall_memory'
+        ? recallOf([
+            { id: 'strong', ns: 'project:kemory-api-integration', text: 'Where does the kemory plugin live? In kemory-plugin.', score: 0.71 },
+            { id: 'weak', ns: 'shared', text: 'The user requested to connect to Kemory once.', score: 0.6 },
+          ])
+        : { content: [], isError: false },
+    ),
+  )
+
+  const clock = mock.clock(on)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+  await $.session.start({ cwd: '/Users/k/src/kemory-plugin', surface: 'desktop', isInteractive: true })
+  await clock.settle()
+
+  const ui = await $.ui.mount(PANE('desktop'))
+  expect(await ui.find({ text: /Where does the kemory plugin live\?/ })).toBeTruthy()
+  expect(await ui.find({ text: /connect to Kemory once/ })).toBeUndefined()
+
+  // No row holds both the label and the title.
+  type Node = string | { type: string; props?: { label?: string }; children?: Node[] }
+  const textOf = (n: Node): string =>
+    typeof n === 'string' ? n : (n.props?.label ?? '') + (n.children ?? []).map(textOf).join('')
+  const rows: Node[][] = []
+  const walk = (n: Node) => {
+    if (typeof n === 'string') return
+    if (n.type === 'Box') rows.push(n.children ?? [])
+    for (const c of n.children ?? []) walk(c)
+  }
+  walk((await ui.drawn()) as unknown as Node)
+  const holds = (row: Node[], re: RegExp) => row.some(c => re.test(textOf(c)))
+  expect(rows.some(r => holds(r, /^REPO$/))).toBe(true)
+  expect(rows.some(r => holds(r, /^REPO$/) && holds(r, /kemory plugin live/))).toBe(false)
+})
