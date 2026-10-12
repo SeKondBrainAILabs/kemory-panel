@@ -1,4 +1,5 @@
-import type { EngineInterface as Engine, Register } from 'claude-code'
+import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
+import { LOGOMARK_PNG } from './logomark'
 
 // Kemory inside Claude Code, loaded by 2.1.267 and later through the "modules"
 // key in hooks.json. Older Claude Code builds and Grok ignore that key and run
@@ -40,6 +41,9 @@ const BRIEF_MIN_SIMILARITY = 0.55
 // Automatic session summaries say what a session was about, not what is true.
 const BRIEF_SKIP_NAMESPACE = /^user:sessions/
 const IDLE_MS = 5 * 60 * 1000
+// A call made while the plugin's server is still connecting is tried again
+// once after this pause.
+const CONNECT_RETRY_MS = 2000
 const MIN_TURNS_FOR_SUGGESTIONS = 3
 
 const CHECK = `
@@ -75,7 +79,12 @@ type Entry = {
   isDeleted?: boolean
   isConfirmingDelete?: boolean
 }
-type Suggestion = { key: string; text: string; state: 'new' | 'saving' | 'saved' | 'skipped' }
+type Suggestion = {
+  key: string
+  text: string
+  state: 'new' | 'saving' | 'saved' | 'failed' | 'skipped'
+  reason?: string
+}
 
 // Module state: a hot reload starts it over, and the next check refills it.
 let problem: string | undefined
@@ -297,14 +306,44 @@ async function findConnector($: Engine) {
   }
 }
 
+// Every call to the plugin's server goes through here. A call made before the
+// server has connected throws at once instead of waiting, so that one is tried
+// again after a pause; any other failure comes back as an errored result whose
+// text says why, so no action is left waiting on a call that threw.
+async function callKemory($: Engine, tool: string, args: Record<string, unknown>): Promise<McpToolResult> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await $.mcp.call(SERVER, tool, args)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (attempt === 0 && /no connected MCP tool/.test(message)) {
+        await $.clock.sleep(CONNECT_RETRY_MS)
+        continue
+      }
+      const text = /no connected MCP tool/.test(message)
+        ? "the kemory plugin's server is not connected. Check that the kemory plugin is installed and enabled"
+        : message
+
+      return { content: [{ type: 'text', text }], isError: true }
+    }
+  }
+}
+
+// Why a call failed, short enough for a toast.
+function failureOf(result: McpToolResult): string {
+  const text = textOf(result).split(/\s+/).join(' ').trim()
+
+  return text.length > 140 ? `${text.slice(0, 139)}…` : text || 'no reason given'
+}
+
 // A person's verdict on a memory, sent through the plugin's server.
 async function rate($: Engine, key: string, rating: 'up' | 'down') {
   const e = find(key)
   if (!e?.id) return
   const reason = rating === 'up' ? 'correct' : 'outdated'
-  const result = await $.mcp.call(SERVER, 'kemory_rate_memory', { target_id: e.id, rating, reason })
+  const result = await callKemory($, 'kemory_rate_memory', { target_id: e.id, rating, reason })
   if (result.isError) {
-    $.ui.toast('Kemory: rating failed')
+    $.ui.toast(`Kemory: rating failed: ${failureOf(result)}`)
     return
   }
   e.rating = rating
@@ -321,10 +360,10 @@ async function remove($: Engine, key: string) {
     redraw($)
     return
   }
-  const result = await $.mcp.call(SERVER, 'kemory_delete_memory', { memory_id: e.id })
+  const result = await callKemory($, 'kemory_delete_memory', { memory_id: e.id })
   e.isConfirmingDelete = false
   if (result.isError) {
-    $.ui.toast('Kemory: delete failed')
+    $.ui.toast(`Kemory: delete failed: ${failureOf(result)}`)
   } else {
     e.isDeleted = true
     $.ui.toast(`Kemory: deleted "${e.title}"`)
@@ -333,21 +372,23 @@ async function remove($: Engine, key: string) {
 }
 
 // A save a person asked for: /remember, "Save last reply", or a suggestion.
-async function save($: Engine, content: string): Promise<boolean> {
-  const result = await $.mcp.call(SERVER, 'kemory_store_memory', {
+// Resolves to why it failed, or undefined once saved.
+async function save($: Engine, content: string): Promise<string | undefined> {
+  const result = await callKemory($, 'kemory_store_memory', {
     content,
     namespace: NAMESPACE,
     content_type: 'fact',
   })
   if (result.isError) {
-    $.ui.toast('Kemory: save failed')
-    return false
+    const reason = failureOf(result)
+    $.ui.toast(`Kemory: save failed: ${reason}`, { timeoutMs: 8000 })
+    return reason
   }
   const entry = stored(textOf(result), content, `save-${entries.length}`, NAMESPACE)
   add(entry)
   $.ui.toast(saveNotice(entry), { timeoutMs: 6000 })
   redraw($)
-  return true
+  return undefined
 }
 
 async function lastReply($: Engine): Promise<string | undefined> {
@@ -404,10 +445,13 @@ async function suggest($: Engine, isAsked: boolean) {
 
 async function saveSuggestion($: Engine, key: string) {
   const s = suggestions.find(x => x.key === key)
-  if (!s || s.state !== 'new') return
+  if (!s || (s.state !== 'new' && s.state !== 'failed')) return
   s.state = 'saving'
+  s.reason = undefined
   redraw($)
-  s.state = (await save($, s.text)) ? 'saved' : 'new'
+  const reason = await save($, s.text)
+  s.state = reason ? 'failed' : 'saved'
+  s.reason = reason
   redraw($)
 }
 
@@ -422,7 +466,7 @@ async function brief($: Engine) {
   const root = await $.session.root()
   repoName = root.split('/').filter(Boolean).pop() ?? ''
   if (!repoName) return
-  const result = await $.mcp.call(SERVER, 'kemory_recall_memory', {
+  const result = await callKemory($, 'kemory_recall_memory', {
     query: `${repoName} repository: how it is set up, decisions and gotchas`,
     limit: 8,
   })
@@ -436,10 +480,24 @@ async function brief($: Engine) {
   redraw($)
 }
 
-// Look and feel. Kemory's accent, and one stable color per namespace so the
-// same namespace reads the same everywhere.
-const ACCENT = '#a78bfa'
-const CHIP_COLORS = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#22d3ee']
+// Look and feel, from the SeKondBrain brand book v6 (brand.s9n.ai): the
+// accent palette, hairline borders rather than coloured ones, pill tags with a
+// coloured dot, status dots, and no decorative glyphs.
+const BRAND = {
+  purple: '#8B78F5',
+  blue: '#1A8AF6',
+  pink: '#E24AF2',
+  orange: '#F28B68',
+  yellow: '#E6B800',
+  mint: '#3DD680',
+  grey: '#969696',
+  danger: '#EF4444',
+  // 8% white on the dark panel (#0E0E10)
+  hairline: '#2A2A2E',
+}
+const ACCENT = BRAND.purple
+// One stable colour per namespace, so the same namespace reads the same everywhere.
+const CHIP_COLORS = [BRAND.purple, BRAND.blue, BRAND.pink, BRAND.mint, BRAND.yellow, BRAND.orange]
 // The dashboard has no page for a single memory; its memories view filters
 // by namespace, so a memory links to its namespace there.
 const DASHBOARD = 'https://app.kemory.ai/memories'
@@ -461,25 +519,22 @@ function verb(e: Entry): string {
   return { saved: 'Saved', updated: 'Updated', recalled: 'Recalled', brief: 'About this repo' }[e.kind]
 }
 
-// The session's activity as three rings (saved, recalled, rated), drawn
-// where the surface takes SVG.
-function activityRing(saved: number, recalled: number, rated: number): string {
-  const ring = (r: number, value: number, color: string) => {
-    const length = 2 * Math.PI * r
-    const share = Math.min(1, value / Math.max(10, saved + recalled + rated))
-    return (
-      `<circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-opacity="0.18" stroke-width="6"/>` +
-      `<circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" ` +
-      `stroke-dasharray="${(share * length).toFixed(1)} ${length.toFixed(1)}" transform="rotate(-90 36 36)"/>`
-    )
-  }
-
+// The SeKondBrain mark, drawn where the surface takes SVG.
+function logomark(size: number): string {
   return (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">' +
-    ring(30, saved, '#a78bfa') +
-    ring(21, recalled, '#60a5fa') +
-    ring(12, rated, '#34d399') +
-    '</svg>'
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 96 96">` +
+    `<image href="data:image/png;base64,${LOGOMARK_PNG}" width="96" height="96"/></svg>`
+  )
+}
+
+// A namespace as a pill tag: its colour as a dot, its name in grey capitals.
+// biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
+function tag(Text: any, namespace: string) {
+  return (
+    <Text>
+      <Text color={chipColor(namespace)}>●</Text>
+      <Text color={BRAND.grey}> {(namespace || 'kemory').toUpperCase()}</Text>
+    </Text>
   )
 }
 
@@ -496,17 +551,13 @@ function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
       key={`box-${at}-${m.key}`}
       flexDirection="column"
       borderStyle="round"
-      borderColor={m.isDeleted ? undefined : ACCENT}
-      borderDimColor={m.isDeleted}
+      borderColor={BRAND.hairline}
       paddingX={1}
       marginY={0}
     >
       <Box gap={1}>
-        <Text color={ACCENT}>◆</Text>
-        <Text dimColor>{verb(m)}</Text>
-        <Box backgroundColor={chipColor(m.namespace)} paddingX={1}>
-          <Text color="#111111">{m.namespace || 'kemory'}</Text>
-        </Box>
+        <Text color={m.isDeleted ? BRAND.grey : ACCENT}>{verb(m).toUpperCase()}</Text>
+        {tag(Text, m.namespace)}
         <Button
           key={`open-${at}-${m.key}`}
           plain
@@ -571,7 +622,9 @@ export const register: Register = on => {
     const text = e.args.trim() || (await lastReply($))
     if (!text) return { text: 'Nothing to save: no text given and no reply yet.' }
 
-    return { text: (await save($, text)) ? `Saved to ${NAMESPACE}: ${titleOf(text)}` : 'Save failed.' }
+    const reason = await save($, text)
+
+    return { text: reason ? `Save failed: ${reason}` : `Saved to ${NAMESPACE}: ${titleOf(text)}` }
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'kemory-plus:learned' }, async $ => {
@@ -672,10 +725,10 @@ export const register: Register = on => {
     const more = shown.length - BAND_ROWS
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={ACCENT} paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
         <Box gap={1}>
           <Text color={ACCENT} bold>
-            ◆ Kemory
+            Kemory
           </Text>
           <Text dimColor>{heading}</Text>
           <Button key="band-open" label="Open" dimColor onPress={() => $.ui.open({ id: PANE, title: 'Kemory' })} />
@@ -691,9 +744,7 @@ export const register: Register = on => {
         </Box>
         {shown.slice(0, BAND_ROWS).map(m => (
           <Box key={`band-${m.key}`} gap={1}>
-            <Box backgroundColor={chipColor(m.namespace)} paddingX={1}>
-              <Text color="#111111">{m.namespace || 'kemory'}</Text>
-            </Box>
+            {tag(Text, m.namespace)}
             <Text wrap="truncate-end">{m.title}</Text>
           </Box>
         ))}
@@ -733,53 +784,54 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Box gap={2} alignItems="center" borderStyle="round" borderColor={ACCENT} paddingX={1}>
-          {svg &&
-            svg({
-              key: 'ring',
-              source: activityRing(saved, recalled, rated),
-              alt: `This session: ${saved} saved, ${recalled} recalled, ${rated} rated`,
-              width: 72,
-              height: 72,
-            })}
+        <Box gap={2} alignItems="center" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
+          {svg && svg({ key: 'mark', source: logomark(56), alt: 'Kemory', width: 56, height: 56 })}
           <Box flexDirection="column">
-            <Text color={ACCENT} bold>
-              ◆ Kemory · this session
+            <Text>
+              <Text bold>Kemory</Text>
+              <Text color={BRAND.grey}> · this session</Text>
             </Text>
             <Text>
-              <Text color="#a78bfa">● {saved} saved</Text>
-              {'   '}
-              <Text color="#60a5fa">● {recalled} recalled</Text>
-              {'   '}
-              <Text color="#34d399">● {rated} rated</Text>
+              <Text color={BRAND.purple}>●</Text>
+              <Text color={BRAND.grey}> SAVED {saved}   </Text>
+              <Text color={BRAND.blue}>●</Text>
+              <Text color={BRAND.grey}> RECALLED {recalled}   </Text>
+              <Text color={BRAND.mint}>●</Text>
+              <Text color={BRAND.grey}> RATED {rated}</Text>
             </Text>
             <Box gap={1}>
               <Button
                 key="pane-learn"
                 variant="primary"
-                label={isSuggesting ? 'Thinking…' : 'What did we learn?'}
+                label={isSuggesting ? 'Reading the session…' : 'Suggest memories'}
                 onPress={() => suggest($, true)}
               />
               <Button key="pane-save-reply" label="Save last reply" onPress={() => saveLastReply($)} />
             </Box>
+            <Text color={BRAND.grey}>
+              Suggest memories reads this session and proposes facts worth keeping. Nothing is saved until you press
+              Save.
+            </Text>
           </Box>
         </Box>
         {open.length > 0 && (
-          <Box flexDirection="column" borderStyle="round" borderColor="#fbbf24" paddingX={1}>
-            <Text color="#fbbf24" bold>
-              ✦ Suggested memories
+          <Box flexDirection="column" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
+            <Text>
+              <Text color={BRAND.yellow}>●</Text>
+              <Text color={BRAND.grey}> SUGGESTED · NOT SAVED YET</Text>
             </Text>
             {open.map(s => (
               <Box key={`sug-${s.key}`} flexDirection="column">
-                <Text dimColor={s.state === 'saved'}>
-                  {s.state === 'saved' ? '✓ ' : '· '}
+                <Text color={s.state === 'saved' ? BRAND.grey : undefined}>
+                  {s.state === 'saved' ? '✓ ' : ''}
                   {titleOf(s.text)}
                 </Text>
+                {s.state === 'failed' && <Text color={BRAND.danger}>Could not save: {s.reason}</Text>}
                 {s.state !== 'saved' && (
                   <Box gap={1}>
                     <Button
                       key={`sug-save-${s.key}`}
-                      label={s.state === 'saving' ? 'Saving…' : 'Save'}
+                      label={{ new: 'Save', saving: 'Saving…', failed: 'Retry', skipped: 'Save' }[s.state]}
                       variant="primary"
                       onPress={() => saveSuggestion($, s.key)}
                     />
