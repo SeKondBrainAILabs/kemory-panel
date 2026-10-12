@@ -1,15 +1,15 @@
-# kemory-plus
+# kemory-panel
 
 Kemory inside Claude Code. Install it beside the `kemory` plugin, whose MCP
 server and credential it uses:
 
 ```
-/plugin install kemory-plus@kemory
+/plugin install kemory-panel@kemory
 ```
 
 | Piece | What it does |
 |-------|--------------|
-| `hooks/register.tsx` | A function-hooks module (Claude Code 2.1.267+; older builds and Grok ignore it). Draws the status line (`kemory ✓ · N recalled · N saved`, or what is broken), the memories in context above the prompt, a card on each save and recall in the transcript, and the `/kemory-plus:memories` panel with Helpful, Outdated, Delete and Open in Kemory. Suggests memories on request (`/kemory-plus:learned`), or when a session goes quiet with `KEMORY_AUTO_SUGGEST=1`, saves on request (`/kemory-plus:remember`), and keeps one set of Kemory tools in front when the claude.ai connector is live. |
+| `hooks/register.tsx` | A function-hooks module (Claude Code 2.1.267+; older builds and Grok ignore it). Draws the status line (`kemory ✓ · N recalled · N saved`, or what is broken), the memories in context above the prompt, a card on each save and recall in the transcript, and the `/kemory-panel:memories` panel with Helpful, Outdated, Delete and Open in Kemory. Suggests memories on request (`/kemory-panel:learned`), or when a session goes quiet with `KEMORY_AUTO_SUGGEST=1`, saves on request (`/kemory-panel:remember`), and keeps one set of Kemory tools in front when the claude.ai connector is live. |
 | `scripts/recall-approve.sh` | `PreToolUse` on Kemory tools: auto-approves **read-only** tools so recall costs no permission prompt. Writes still ask, every time. |
 | `scripts/lib.sh` | A copy of the kemory plugin's credential resolution, which the status check sources. `scripts/check.sh` fails if the two drift. |
 

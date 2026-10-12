@@ -20,7 +20,7 @@ const SURFACES = ['terminal', 'desktop'] as const
 
 const BAND = (surface: (typeof SURFACES)[number]) =>
   ({
-    plugin: 'kemory-plus',
+    plugin: 'kemory-panel',
     surface,
     component: 'AbovePrompt',
     props: {
@@ -76,7 +76,7 @@ test('a store call becomes a card and a toast', async ($, on) => {
   expect(toasts.at(-1)).toBe('Saved to shared: "Why does the band show nothing on a short prompt?"')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: 'kemory-plus',
+      plugin: 'kemory-panel',
       surface,
       component: 'ToolUse',
       props: {
@@ -150,7 +150,7 @@ test('KEMORY_ALLOW_DUPLICATE=1 keeps both sets in front', async ($, on) => {
 
 const PANE = (surface: (typeof SURFACES)[number]) =>
   ({
-    plugin: 'kemory-plus',
+    plugin: 'kemory-panel',
     surface,
     component: 'Pane',
     requestId: 'kemory-memories',

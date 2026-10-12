@@ -66,10 +66,10 @@ else
 fi
 
 echo "→ approval hook tests"
-if python3 tests/test_recall_approve.py >/tmp/kemory-plus-tests.log 2>&1; then
-  echo "  ok   $(grep -oE 'Ran [0-9]+ tests' /tmp/kemory-plus-tests.log) passed"
+if python3 tests/test_recall_approve.py >/tmp/kemory-panel-tests.log 2>&1; then
+  echo "  ok   $(grep -oE 'Ran [0-9]+ tests' /tmp/kemory-panel-tests.log) passed"
 else
-  echo "  FAIL see /tmp/kemory-plus-tests.log"; tail -20 /tmp/kemory-plus-tests.log; fail=1
+  echo "  FAIL see /tmp/kemory-panel-tests.log"; tail -20 /tmp/kemory-panel-tests.log; fail=1
 fi
 
 # The module needs a Claude Code that loads modules; without the CLI these
