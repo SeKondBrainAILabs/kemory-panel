@@ -5,6 +5,25 @@ kemory-plus moved here from the `plus/` folder of
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.14.0]
+
+### Fixed
+- Saving a suggested memory could stay on "Saving…" for good. A call to the
+  kemory plugin's server that failed, or was made before that server had
+  connected, threw, and nothing caught it. Every call now goes through one
+  path: it tries again once if the server is still connecting, and otherwise
+  shows the reason ("Could not save: …") with a Retry button. Rating, deleting
+  and `/kemory-plus:remember` report their failures the same way.
+
+### Changed
+- The panel, the band above the prompt and the transcript cards follow the
+  SeKondBrain brand book (brand.s9n.ai): the SeKondBrain mark in the panel,
+  the brand palette, hairline borders, and namespaces as pill tags with a
+  coloured dot.
+- "What did we learn?" is now "Suggest memories", with a line saying what it
+  does: it reads the session and proposes facts worth keeping, and nothing is
+  saved until you press Save.
+
 ## [0.13.0]
 
 ### Changed

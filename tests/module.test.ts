@@ -3,7 +3,8 @@ import { expect, mock, test } from 'claude-code/testing'
 // The module under test reads the session through these events; each test
 // answers the ones its path reaches. Unanswered, the kit's bottom throws.
 // A call on `$` (ui.status, tool.list, mcp.call) is answered as `{ value }`
-// beneath the plugin, which is not the shape its result type declares.
+// beneath the plugin, which is not the shape its result type declares, and
+// made to reject with `{ deny }` (a hook that throws is skipped instead).
 const answer = (value?: unknown) => ({ value }) as never
 
 const RECALL_CONTEXT = [
@@ -145,4 +146,74 @@ test('KEMORY_ALLOW_DUPLICATE=1 keeps both sets in front', async ($, on) => {
   } as never)
 
   expect(described.isDeferred).toBeUndefined()
+})
+
+const PANE = (surface: (typeof SURFACES)[number]) =>
+  ({
+    plugin: 'kemory-plus',
+    surface,
+    component: 'Pane',
+    requestId: 'kemory-memories',
+    props: { title: 'Kemory', isFocused: true, bodyColumns: 100, placement: 'dock' },
+  }) as never
+
+const SUGGESTED = 'How do we test a marketplace entry without touching the real install? Use a throwaway CLAUDE_CONFIG_DIR.'
+const STORED = { content: [{ type: 'text', text: 'Memory stored successfully.\nID: m-1\nNamespace: shared\nVersion: 1' }], isError: false }
+const USAGE = { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+
+for (const surface of SURFACES) {
+  test(`a suggested memory that fails to save says why and offers Retry (${surface})`, async ($, on) => {
+    mock.env(on, {})
+    const toasts: string[] = []
+    on('ui.status', () => answer())
+    on('ui.toast', (_$, e) => {
+      toasts.push(e.text)
+      return answer()
+    })
+    on('model.fork', () => answer({ isAnswered: true, text: JSON.stringify([SUGGESTED]), usage: USAGE }))
+    let calls = 0
+    on('mcp.call', () => {
+      calls += 1
+      if (calls === 1) return { deny: 'Kemory API returned 503' } as never
+      return answer(STORED)
+    })
+
+    const ui = await $.ui.mount(PANE(surface))
+    await ui.press({ key: 'pane-learn' } as never)
+    expect(await ui.find({ text: /SUGGESTED · NOT SAVED YET/ })).toBeTruthy()
+
+    await ui.press({ key: 'sug-save-s-0' } as never)
+    expect(await ui.find({ text: /Could not save: .*503/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Button', text: 'Retry' })).toBeTruthy()
+    expect(toasts.some(t => t.startsWith('Kemory: save failed:'))).toBe(true)
+
+    await ui.press({ key: 'sug-save-s-0' } as never)
+    expect(await ui.find({ text: /Could not save/ })).toBeUndefined()
+    expect(await ui.find({ text: /SAVED 1/ })).toBeTruthy()
+  })
+}
+
+test('a save made while the server is still connecting is tried again', async ($, on) => {
+  mock.env(on, {})
+  const clock = mock.clock(on)
+  on('ui.status', () => answer())
+  on('ui.toast', () => answer())
+  on('model.fork', () => answer({ isAnswered: true, text: JSON.stringify([SUGGESTED]), usage: USAGE }))
+  let calls = 0
+  on('mcp.call', () => {
+    calls += 1
+    if (calls === 1) {
+      return { deny: 'no connected MCP tool "kemory_store_memory" on a server named "plugin:kemory:kemory"' } as never
+    }
+    return answer(STORED)
+  })
+
+  const ui = await $.ui.mount(PANE('desktop'))
+  await ui.press({ key: 'pane-learn' } as never)
+  const pressed = ui.press({ key: 'sug-save-s-0' } as never)
+  await clock.advance(2000)
+  await pressed
+
+  expect(calls).toBe(2)
+  expect(await ui.find({ text: /SAVED 1/ })).toBeTruthy()
 })
