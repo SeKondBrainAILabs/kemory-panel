@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in the status line, the band, the cards or the panel does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the status line names a problem (no credential, token expired, API
+        unreachable), run `/kemory:status` first. That comes from the kemory
+        plugin, and its output usually names the fix.
+  - type: input
+    id: version
+    attributes:
+      label: kemory-panel version
+      description: From `claude plugin list`, or `.claude-plugin/plugin.json`.
+      placeholder: "0.15.0"
+    validations:
+      required: true
+  - type: input
+    id: claude-version
+    attributes:
+      label: Claude Code version
+      description: From `claude --version`. The panel needs 2.1.267 or later.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where you are running Claude Code
+      options:
+        - Terminal
+        - Desktop app
+        - IDE extension
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: A screenshot helps. Crop or blur any memory text you would rather not publish.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
