@@ -409,3 +409,60 @@ test('a live connector is explained in the panel, not on the status line', async
     expect(await ui.find({ text: /Using the claude\.ai Kemory connector/ })).toBeTruthy()
   }
 })
+
+// whoami answers per server: the plugin's own and, when given, a connector's.
+function orgs(on: On, plugin: string, connectorOrg?: string) {
+  const toasts: string[] = []
+  const statuses: string[] = []
+  mock.env(on, { HOME: '/home/k' })
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text ?? '')
+    return answer()
+  })
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return answer()
+  })
+  on('tool.list', () =>
+    answer(connectorOrg ? [{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }] : []),
+  )
+  on('session.root', () => answer('/home/k/src/app'))
+  on('session.surfaces', () => answer(['desktop']))
+  on('process.run', () => answer({ stdout: '200', stderr: '', code: 0 }))
+  on('http.fetch', () => answer({ ok: false, status: 404, text: '' }))
+  on('fs.read', () => answer('{"plugins":{"kemory@kemory":[{"version":"0.15.1"}]}}'))
+  on('mcp.call', (_$, e) => {
+    if (e.tool !== 'kemory_whoami') return answer({ content: [], isError: false })
+    const name = e.server === 'conn-1' ? connectorOrg : plugin
+    return answer({ content: [{ type: 'text', text: JSON.stringify({ org_name: name }) }], isError: false })
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+
+  return { toasts, statuses }
+}
+
+test('the status line and the panel name the organisation the plugin writes to', async ($, on) => {
+  const { toasts, statuses } = orgs(on, 'SeKondBrain')
+  await start($, on)
+
+  expect(statuses.at(-1)).toContain('✓ SeKondBrain')
+  expect(toasts.some(t => t.includes('connector'))).toBe(false)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(PANE(surface))
+    expect(await ui.find({ text: / · SeKondBrain/ })).toBeTruthy()
+  }
+})
+
+test('a connector on another organisation is flagged, with the command to fix it', async ($, on) => {
+  const { toasts, statuses } = orgs(on, 'StressTest', 'SeKondBrain')
+  await start($, on)
+
+  expect(statuses.at(-1)).toContain('✓ StressTest')
+  expect(statuses.at(-1)).toContain('⚠ connector on SeKondBrain')
+  const toast = toasts.find(t => t.includes('connector')) ?? ''
+  expect(toast).toContain('the plugin writes to StressTest but the claude.ai connector writes to SeKondBrain')
+  expect(toast).toContain(`'kemory use "SeKondBrain"'`)
+  expect(toasts.filter(t => t.includes('connector writes to'))).toHaveLength(1)
+  const ui = await $.ui.mount(PANE('desktop'))
+  expect(await ui.find({ text: /Claude's own saves go through the claude\.ai/ })).toBeTruthy()
+})

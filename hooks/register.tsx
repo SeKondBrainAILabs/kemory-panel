@@ -99,6 +99,12 @@ let problem: string | undefined
 // tools in place, or the session ends up with no Kemory tools at all.
 let connector: string | undefined
 let connectorChecks = 0
+// The organisation each Kemory server reads and writes. One account can belong
+// to several, and the plugin (local credential, `kemory use`) and the claude.ai
+// connector (its own sign-in) can each be on a different one.
+let orgName: string | undefined
+let connectorOrg: string | undefined
+let toldOrgMismatch = false
 let stale: string | undefined
 // The notice the update toast last carried, so it appears once per session
 // per release, not on every recheck.
@@ -168,11 +174,42 @@ function count(kinds: Kind[]): number {
 function draw($: Engine) {
   const recalled = count(['recalled'])
   const saved = count(['saved', 'updated'])
-  const parts = [problem ? `✗ ${problem}, run /kemory:status` : '✓']
+  const parts = [problem ? `✗ ${problem}, run /kemory:status` : orgName ? `✓ ${orgName}` : '✓']
+  const mismatch = orgMismatch()
+  if (!problem && mismatch) parts.push(`⚠ connector on ${mismatch}`)
   if (!problem && recalled > 0) parts.push(`${recalled} recalled`)
   if (!problem && saved > 0) parts.push(`${saved} saved`)
   if (stale) parts.push(stale)
   $.ui.status(parts.join(' · '))
+}
+
+// The connector's organisation when it differs from the plugin's, else undefined.
+function orgMismatch(): string | undefined {
+  return connector && orgName && connectorOrg && connectorOrg !== orgName ? connectorOrg : undefined
+}
+
+function orgOf(result: McpToolResult): string | undefined {
+  try {
+    const name = JSON.parse(textOf(result)).org_name
+
+    return typeof name === 'string' && name ? name : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Says once per session when the two servers write to different
+// organisations: what Claude saves goes through the connector, and what this
+// panel and the kemory hooks save goes through the plugin.
+async function warnOrgMismatch($: Engine) {
+  const other = orgMismatch()
+  if (!other || toldOrgMismatch) return
+  toldOrgMismatch = true
+  $.ui.toast(
+    `Kemory: the plugin writes to ${orgName} but the claude.ai connector writes to ${other}. ` +
+      `To use one, run 'kemory use "${other}"' in a terminal, then open a new session.`,
+    { timeoutMs: 15000 },
+  )
 }
 
 function redraw($: Engine) {
@@ -271,7 +308,7 @@ async function commandHint($: Engine, actions: { verb: 'install' | 'update'; nam
 
 async function check($: Engine) {
   const root = $.plugin.root
-  const [run, running, latestKemory, latestPanel, onDisk] = await Promise.all([
+  const [run, running, latestKemory, latestPanel, onDisk, me] = await Promise.all([
     $.process
       .run(['bash', '-c', CHECK, 'kemory-status', root], { timeoutMs: 20000 })
       .catch(() => undefined),
@@ -279,7 +316,9 @@ async function check($: Engine) {
     versionAt($, LATEST_URLS.kemory),
     versionAt($, LATEST_URLS['kemory-panel']),
     versionsOnDisk($),
+    callKemory($, 'kemory_whoami', {}),
   ])
+  if (!me.isError) orgName = orgOf(me) ?? orgName
   const code = run?.stdout.trim() || '000'
   const was = problem
   problem = code === '200' ? undefined : (PROBLEMS[code] ?? `API returned HTTP ${code}`)
@@ -320,6 +359,7 @@ async function check($: Engine) {
   }
 
   if (problem && problem !== was) $.ui.toast(`Kemory: ${problem}`)
+  await warnOrgMismatch($)
   draw($)
 }
 
@@ -340,7 +380,9 @@ async function findConnector($: Engine) {
     const answer = await $.mcp.call(server, 'kemory_whoami', {}).catch(() => undefined)
     if (answer && !answer.isError) {
       connector = server
+      connectorOrg = orgOf(answer)
       $.ui.invalidate('tool.describe')
+      await warnOrgMismatch($)
       draw($)
       return
     }
@@ -867,6 +909,7 @@ export const register: Register = on => {
           <Box flexDirection="column">
             <Text>
               <Text bold>Kemory</Text>
+              {orgName && <Text color={BRAND.grey}> · {orgName}</Text>}
               <Text color={BRAND.grey}> · this session</Text>
             </Text>
             <Text>
@@ -877,6 +920,12 @@ export const register: Register = on => {
               <Text color={BRAND.mint}>●</Text>
               <Text color={BRAND.grey}> RATED {rated}</Text>
             </Text>
+            {orgMismatch() && (
+              <Text color={BRAND.danger}>
+                This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
+                connector, which writes to {orgMismatch()}. Run kemory use "{orgMismatch()}" in a terminal to use one.
+              </Text>
+            )}
             {connector && (
               <Text color={BRAND.grey}>
                 Using the claude.ai Kemory connector. This plugin's copies of the same tools are behind tool search,

@@ -12,6 +12,7 @@ covers what that plugin sends.
 | When | What | Where |
 |------|------|-------|
 | Session start, then every 10 minutes | A request with your credential, to check that Kemory answers | Your Kemory instance (`/api/v1/namespaces`) |
+| Session start, then every 10 minutes | A `kemory_whoami` call, to show which organisation you write to | Your Kemory instance, through the kemory plugin |
 | Session start, then every 10 minutes | A request for the latest version numbers of the kemory plugin and this one, to tell you about updates | `raw.githubusercontent.com` (a public file; nothing of yours is sent) |
 | Session start | A search for what Kemory knows about the folder you opened, using its name | Your Kemory instance, through the kemory plugin |
 | Session start and the first three prompts, while the claude.ai Kemory connector is connected | A `kemory_whoami` call through that connector, to check it is live before hiding this plugin's duplicate tools | Your Kemory instance, through the connector |
