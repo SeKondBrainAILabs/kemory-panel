@@ -162,13 +162,15 @@ function count(kinds: Kind[]): number {
 
 // The surface already labels the line with the plugin's name, so the text
 // leads with the state alone.
+// The status line carries only what a person can act on or wants to count:
+// a problem, an update, and this session's numbers. Which server answers is
+// explained in the panel instead.
 function draw($: Engine) {
   const recalled = count(['recalled'])
   const saved = count(['saved', 'updated'])
   const parts = [problem ? `✗ ${problem}, run /kemory:status` : '✓']
   if (!problem && recalled > 0) parts.push(`${recalled} recalled`)
   if (!problem && saved > 0) parts.push(`${saved} saved`)
-  if (!problem && connector) parts.push('via connector')
   if (stale) parts.push(stale)
   $.ui.status(parts.join(' · '))
 }
@@ -875,6 +877,12 @@ export const register: Register = on => {
               <Text color={BRAND.mint}>●</Text>
               <Text color={BRAND.grey}> RATED {rated}</Text>
             </Text>
+            {connector && (
+              <Text color={BRAND.grey}>
+                Using the claude.ai Kemory connector. This plugin's copies of the same tools are behind tool search,
+                so each request carries one set.
+              </Text>
+            )}
             <Box gap={1}>
               <Button
                 key="pane-learn"
