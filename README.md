@@ -13,7 +13,7 @@ capture. kemory-panel uses that plugin's server and credential.
 |-------|------|
 | Status line | `kemory ✓ · 3 recalled · 1 saved`, or what is wrong (no credential, token expired, API unreachable), and `↑ 0.13.2 available` when an update is out |
 | Above the prompt | The memories the last prompt put in context, each with its namespace. Before the first prompt, what Kemory already knows about the folder you opened |
-| Transcript | A card for each save and recall, which opens to the full memory |
+| Transcript (terminal) | A card for each save and recall, which opens to the full memory. On desktop the Kemory server's own cards show these instead |
 | `/kemory-panel:memories` | A panel with this session's memories. Rate one Helpful or Outdated, delete it, or open it in Kemory. **Suggest memories** proposes facts from the session worth keeping, and **Save last reply** keeps Claude's last answer |
 | Permission prompts | Read-only Kemory tools (recall, search, list) run without asking. Every write still asks |
 | Duplicate tools | When the claude.ai Kemory connector is also connected, this plugin's copies of the same tools move behind tool search, so each request carries one set |
