@@ -59,7 +59,8 @@ if ! kemory_resolve_auth; then
 fi
 [ "\${KEMORY_TOKEN_EXPIRED:-0}" = 1 ] && { echo expired; exit 0; }
 curl -s -o /dev/null -w '%{http_code}' --max-time 6 \\
-  -H "$KEMORY_AUTH_HEADER" "$KEMORY_BASE_URL/api/v1/namespaces" 2>/dev/null
+  -H "$KEMORY_AUTH_HEADER" \${KEMORY_ORG_HEADER:+-H "$KEMORY_ORG_HEADER"} \\
+  "$KEMORY_BASE_URL/api/v1/namespaces" 2>/dev/null
 `
 
 const PROBLEMS: Record<string, string> = {
