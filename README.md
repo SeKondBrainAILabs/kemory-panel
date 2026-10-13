@@ -11,12 +11,27 @@ capture. kemory-panel uses that plugin's server and credential.
 
 | Where | What |
 |-------|------|
-| Status line | `kemory ✓ · 3 recalled · 1 saved`, or what is wrong (no credential, token expired, API unreachable), and `↑ 0.13.2 available` when an update is out |
+| Status line | `✓ SeKondBrain · 3 recalled · 1 saved`: the organisation you write to and this session's counts. Otherwise what is wrong (no credential, token expired, API unreachable), `⚠ connector on <name>` when the claude.ai connector writes to a different organisation, and `↑ kemory 0.15.3` when an update is out |
 | Above the prompt | The memories the last prompt put in context, each with its namespace. Before the first prompt, what Kemory already knows about the folder you opened |
-| Transcript (terminal) | A card for each save and recall, which opens to the full memory. On desktop the Kemory server's own cards show these instead |
+| Transcript (terminal) | A card for each save and recall, which opens to the full memory. Elsewhere the Kemory server's own cards show these; see [Memory cards and this panel](#memory-cards-and-this-panel) |
 | `/kemory-panel:memories` | A panel with this session's memories. Rate one Helpful or Outdated, delete it, or open it in Kemory. **Suggest memories** proposes facts from the session worth keeping, and **Save last reply** keeps Claude's last answer |
 | Permission prompts | Read-only Kemory tools (recall, search, list) run without asking. Every write still asks |
 | Duplicate tools | When the claude.ai Kemory connector is also connected, this plugin's copies of the same tools move behind tool search, so each request carries one set |
+
+## Memory cards and this panel
+
+Two different things show Kemory in Claude, and only one of them needs this
+plugin.
+
+| | Memory cards | kemory-panel |
+|---|---|---|
+| What you see | A card after each save or recall: the memory, its namespace, and Undo, Forget or a rating | The status line, the memories in context above the prompt, the session panel, and cards in the terminal |
+| Where it comes from | The Kemory server, over MCP. It attaches a card (`ui://kemory/memory-saved`, `ui://kemory/recall-results`) to its save and recall tools, and the app shows it beside the result | This plugin, a module Claude Code loads and runs |
+| What you need | A connection to Kemory: the claude.ai connector or the kemory plugin. No plugin is required | Claude Code 2.1.267 or later with this plugin and the kemory plugin |
+| Where it shows | Apps that support MCP Apps, such as Claude desktop, claude.ai and ChatGPT | Claude Code, terminal and desktop |
+
+So one save shows one card: the server's card where the app can show it, and
+this plugin's card in the Claude Code terminal, which cannot.
 
 ## Requirements
 
