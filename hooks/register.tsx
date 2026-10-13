@@ -15,8 +15,13 @@ import { LOGOMARK_PNG } from './logomark'
 // the transcript, a panel listing them with Helpful, Outdated and Delete, saving
 // a note or the last reply, and suggested memories when the session goes quiet.
 
-const LATEST_URL =
-  'https://raw.githubusercontent.com/SeKondBrainAILabs/kemory-plugin/main/plugin/.claude-plugin/plugin.json'
+// Each plugin is checked against its own repository. They version
+// independently, so one's version says nothing about the other's.
+const LATEST_URLS = {
+  kemory: 'https://raw.githubusercontent.com/SeKondBrainAILabs/kemory-plugin/main/plugin/.claude-plugin/plugin.json',
+  'kemory-panel': 'https://raw.githubusercontent.com/SeKondBrainAILabs/kemory-panel/main/.claude-plugin/plugin.json',
+} as const
+type PluginName = keyof typeof LATEST_URLS
 const RECHECK_MS = 10 * 60 * 1000
 const RECALL_TOOL = /^mcp__.*__kemory_(recall.*|ask|get_context|find_similar)$/
 const STORE_TOOL = /^mcp__.*__kemory_store_(memory|skill)$/
@@ -95,8 +100,8 @@ let problem: string | undefined
 let connector: string | undefined
 let connectorChecks = 0
 let stale: string | undefined
-// The version the full update command was last shown for, so the toast that
-// carries it appears once per session per release, not on every recheck.
+// The notice the update toast last carried, so it appears once per session
+// per release, not on every recheck.
 let toldUpdateFor: string | undefined
 const entries: Entry[] = []
 const byCall = new Map<string, string[]>()
@@ -228,16 +233,23 @@ function saveNotice(e: Entry): string {
   return `${what}: "${e.title}"`
 }
 
-// What the last update put on disk. The running session keeps the version it
-// loaded until a new session starts, so the two can differ.
-async function versionOnDisk($: Engine): Promise<string | undefined> {
+// What the last install or update put on disk, per plugin; a plugin that is
+// not installed is absent, and undefined means the list could not be read.
+// The running session keeps the version it loaded until a new session starts,
+// so the two can differ.
+async function versionsOnDisk($: Engine): Promise<Partial<Record<PluginName, string>> | undefined> {
   try {
     const home = await $.env.get('HOME')
     const plugins = JSON.parse(await $.fs.read(`${home}/.claude/plugins/installed_plugins.json`)).plugins ?? {}
-    const key = Object.keys(plugins).find(k => k.startsWith('kemory-panel@'))
-    const installs = key ? plugins[key] : undefined
+    const versions: Partial<Record<PluginName, string>> = {}
+    for (const name of Object.keys(LATEST_URLS) as PluginName[]) {
+      const key = Object.keys(plugins).find(k => k.startsWith(`${name}@`))
+      const installs = key ? plugins[key] : undefined
+      const version = Array.isArray(installs) ? installs[0]?.version : undefined
+      if (typeof version === 'string') versions[name] = version
+    }
 
-    return Array.isArray(installs) ? installs[0]?.version : undefined
+    return versions
   } catch {
     return undefined
   }
@@ -245,37 +257,64 @@ async function versionOnDisk($: Engine): Promise<string | undefined> {
 
 // `/plugin` is a terminal dialog. The desktop app has no such command, so a
 // session drawn only there is told to use the CLI.
-async function updateHint($: Engine): Promise<string> {
-  const surfaces = await $.session.surfaces()
+async function commandHint($: Engine, actions: { verb: 'install' | 'update'; name: PluginName }[]): Promise<string> {
+  const surfaces = await $.session.surfaces().catch(() => [] as string[])
+  const isTerminal = surfaces.includes('terminal')
+  const commands = actions.map(a => (isTerminal ? `/plugin ${a.verb} ${a.name}@kemory` : `'claude plugin ${a.verb} ${a.name}@kemory'`))
 
-  return surfaces.includes('terminal')
-    ? 'Run /plugin update kemory@kemory and /plugin update kemory-panel@kemory, then restart.'
-    : "Run 'claude plugin update kemory@kemory' and 'claude plugin update kemory-panel@kemory' in a terminal, then open a new session."
+  return isTerminal
+    ? `Run ${commands.join(' and ')}, then restart.`
+    : `Run ${commands.join(' and ')} in a terminal, then open a new session.`
 }
 
 async function check($: Engine) {
   const root = $.plugin.root
-  const [run, installed, latest, onDisk] = await Promise.all([
+  const [run, running, latestKemory, latestPanel, onDisk] = await Promise.all([
     $.process
       .run(['bash', '-c', CHECK, 'kemory-status', root], { timeoutMs: 20000 })
       .catch(() => undefined),
     versionAt($, `${root}/.claude-plugin/plugin.json`),
-    versionAt($, LATEST_URL),
-    versionOnDisk($),
+    versionAt($, LATEST_URLS.kemory),
+    versionAt($, LATEST_URLS['kemory-panel']),
+    versionsOnDisk($),
   ])
   const code = run?.stdout.trim() || '000'
   const was = problem
   problem = code === '200' ? undefined : (PROBLEMS[code] ?? `API returned HTTP ${code}`)
+
   // The status line is narrow and cannot be clicked, so it carries only the
-  // fact; the command, which does not fit there, goes in a toast.
-  if (!installed || !latest || !isOlder(installed, latest)) stale = undefined
-  else if (onDisk && !isOlder(onDisk, latest)) stale = `${onDisk} installed, new session to apply`
-  else {
-    stale = `↑ ${latest} available`
-    if (toldUpdateFor !== latest) {
-      toldUpdateFor = latest
-      $.ui.toast(`Kemory ${latest} is out (you have ${installed}). ${await updateHint($)}`, { timeoutMs: 12000 })
+  // facts; the commands, which do not fit there, go in a toast.
+  const facts: string[] = []
+  const notices: string[] = []
+  const actions: { verb: 'install' | 'update'; name: PluginName }[] = []
+  if (running && latestPanel && isOlder(running, latestPanel)) {
+    const disk = onDisk?.['kemory-panel']
+    if (disk && !isOlder(disk, latestPanel)) {
+      facts.push(`kemory-panel ${disk} installed, new session to apply`)
+    } else {
+      facts.push(`↑ kemory-panel ${latestPanel}`)
+      notices.push(`kemory-panel ${latestPanel} is out (you have ${running})`)
+      actions.push({ verb: 'update', name: 'kemory-panel' })
     }
+  }
+  // This module cannot see which kemory version the session loaded, only what
+  // is on disk; after an update the kemory plugin's own hooks say a new
+  // session is needed.
+  const kemory = onDisk?.kemory
+  if (onDisk && !kemory) {
+    facts.push('kemory plugin not installed')
+    notices.push('the kemory plugin, which this panel needs, is not installed')
+    actions.push({ verb: 'install', name: 'kemory' })
+  } else if (kemory && latestKemory && isOlder(kemory, latestKemory)) {
+    facts.push(`↑ kemory ${latestKemory}`)
+    notices.push(`kemory ${latestKemory} is out (you have ${kemory})`)
+    actions.push({ verb: 'update', name: 'kemory' })
+  }
+  stale = facts.length > 0 ? facts.join(' · ') : undefined
+  const notice = notices.join('; ')
+  if (actions.length > 0 && toldUpdateFor !== notice) {
+    toldUpdateFor = notice
+    $.ui.toast(`Kemory: ${notice}. ${await commandHint($, actions)}`, { timeoutMs: 12000 })
   }
 
   if (problem && problem !== was) $.ui.toast(`Kemory: ${problem}`)
