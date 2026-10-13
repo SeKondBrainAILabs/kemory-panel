@@ -553,9 +553,29 @@ function dashboardLink(namespace: string): string {
 }
 
 function verb(e: Entry): string {
-  if (e.isDeleted) return 'Deleted'
+  if (e.isDeleted) return 'Deleted from Kemory'
 
-  return { saved: 'Saved', updated: 'Updated', recalled: 'Recalled', brief: 'Repo' }[e.kind]
+  return {
+    saved: 'Saved to Kemory',
+    updated: 'Updated in Kemory',
+    recalled: 'Recalled from Kemory',
+    brief: 'Kemory knows this about the repo',
+  }[e.kind]
+}
+
+// The status dot beside the verb: what happened, at a glance.
+function kindColor(e: Entry): string {
+  if (e.isDeleted) return BRAND.grey
+
+  return { saved: BRAND.mint, updated: BRAND.yellow, recalled: BRAND.blue, brief: BRAND.purple }[e.kind]
+}
+
+// The text after the title, flattened to one line, for the closed card.
+function previewOf(e: Entry): string {
+  const flat = e.text.split(/\s+/).join(' ').trim()
+  const rest = flat.startsWith(e.title) ? flat.slice(e.title.length).trim() : flat
+
+  return rest.length > 160 ? `${rest.slice(0, 159)}…` : rest
 }
 
 // The SeKondBrain mark, drawn where the surface takes SVG.
@@ -577,13 +597,15 @@ function tag(Text: any, namespace: string) {
   )
 }
 
-// One memory as a card: a header line that opens and closes it, and when
-// open, its text as Markdown, its actions, and a link to it in Kemory.
+// One memory as a card. Closed: what happened and where, the title, and one
+// line of the memory. Open: the whole memory as Markdown and its actions.
 // Elements are the drawing surface's own, passed in by the hook.
 // biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
 function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
   const { Box, Button, Text, Markdown, Link } = els
+  const svg = 'Svg' in els ? (els.Svg as (p: Record<string, unknown>) => never) : undefined
   const isShown = isOpen.has(m.key) && !m.isDeleted
+  const preview = previewOf(m)
 
   return (
     <Box
@@ -592,50 +614,61 @@ function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
       borderStyle="round"
       borderColor={BRAND.hairline}
       paddingX={1}
-      marginY={0}
     >
-      {/* Label and tag on their own line, the title under them: on one line a
-          long namespace squeezed the label into a column and cut the title. */}
-      <Box gap={1}>
-        <Text color={m.isDeleted ? BRAND.grey : ACCENT}>{verb(m).toUpperCase()}</Text>
-        {tag(Text, m.namespace)}
-      </Box>
-      <Box>
-        <Button
-          key={`open-${at}-${m.key}`}
-          plain
-          dimColor={m.isDeleted}
-          label={`${isOpen.has(m.key) ? '▾' : '▸'} ${m.title}`}
-          onPress={() => toggle($, m.key)}
-        />
-      </Box>
-      {isShown && <Markdown key={`md-${at}-${m.key}`} text={m.text.slice(0, 9000)} />}
-      {isShown && (
-        <Box gap={1}>
-          {m.id && m.kind !== 'saved' && m.kind !== 'updated' && (
-            <Button
-              key={`up-${at}-${m.key}`}
-              label={m.rating === 'up' ? '✓ Helpful' : 'Helpful'}
-              onPress={() => rate($, m.key, 'up')}
-            />
-          )}
-          {m.id && (
-            <Button
-              key={`down-${at}-${m.key}`}
-              label={m.rating === 'down' ? '✓ Outdated' : 'Outdated'}
-              onPress={() => rate($, m.key, 'down')}
-            />
-          )}
-          {m.id && (
-            <Button
-              key={`del-${at}-${m.key}`}
-              label={m.isConfirmingDelete ? 'Confirm delete' : 'Delete'}
-              onPress={() => remove($, m.key)}
-            />
-          )}
-          <Link key={`link-${at}-${m.key}`} href={dashboardLink(m.namespace)} label="Open in Kemory ↗" />
+      <Box gap={1} justifyContent="space-between">
+        <Box gap={1} alignItems="center" flexShrink={1}>
+          {svg && svg({ key: `mark-${at}-${m.key}`, source: logomark(14), alt: ' ', width: 14, height: 14 })}
+          <Text color={kindColor(m)}>●</Text>
+          <Text color={m.isDeleted ? BRAND.grey : undefined}>{verb(m)}</Text>
+          {tag(Text, m.namespace)}
         </Box>
+        {!m.isDeleted && (
+          <Box flexShrink={0}>
+            <Link key={`link-${at}-${m.key}`} href={dashboardLink(m.namespace)} label="Open ↗" />
+          </Box>
+        )}
+      </Box>
+      <Text bold strikethrough={m.isDeleted} color={m.isDeleted ? BRAND.grey : undefined}>
+        {m.title}
+      </Text>
+      {!isShown && preview && (
+        <Text color={BRAND.grey} wrap="truncate-end">
+          {preview}
+        </Text>
       )}
+      {isShown && <Markdown key={`md-${at}-${m.key}`} text={m.text.slice(0, 9000)} />}
+      <Box gap={1}>
+        {!m.isDeleted && (preview || isShown) && (
+          <Button
+            key={`open-${at}-${m.key}`}
+            plain
+            dimColor
+            label={isShown ? 'Show less' : 'Show more'}
+            onPress={() => toggle($, m.key)}
+          />
+        )}
+        {isShown && m.id && m.kind !== 'saved' && m.kind !== 'updated' && (
+          <Button
+            key={`up-${at}-${m.key}`}
+            label={m.rating === 'up' ? '✓ Helpful' : 'Helpful'}
+            onPress={() => rate($, m.key, 'up')}
+          />
+        )}
+        {isShown && m.id && (
+          <Button
+            key={`down-${at}-${m.key}`}
+            label={m.rating === 'down' ? '✓ Outdated' : 'Outdated'}
+            onPress={() => rate($, m.key, 'down')}
+          />
+        )}
+        {isShown && m.id && (
+          <Button
+            key={`del-${at}-${m.key}`}
+            label={m.isConfirmingDelete ? 'Confirm delete' : 'Delete'}
+            onPress={() => remove($, m.key)}
+          />
+        )}
+      </Box>
     </Box>
   )
 }

@@ -89,7 +89,16 @@ test('a store call becomes a card and a toast', async ($, on) => {
         isInterrupted: false,
       },
     } as never)
-    expect(await ui.find({ type: 'Button', text: /Why does the band show nothing on a short prompt\?/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: 'Saved to Kemory' })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: /^Why does the band show nothing on a short prompt\?$/ })).toBeTruthy()
+    // Closed: one line of the memory, then Show more opens it with its actions.
+    expect(await ui.find({ text: /^Short prompts need 0\.65 similarity\.$/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Button', text: 'Delete' })).toBeUndefined()
+    await ui.press({ key: `open-${callId}-abc-123` } as never)
+    expect(await ui.find({ type: 'Markdown' })).toBeTruthy()
+    expect(await ui.find({ type: 'Button', text: 'Delete' })).toBeTruthy()
+    expect(await ui.find({ type: 'Button', text: 'Show less' })).toBeTruthy()
+    await ui.press({ key: `open-${callId}-abc-123` } as never)
   }
 })
 
@@ -270,8 +279,8 @@ test('the repo brief keeps strong matches only, each card with its title on a li
   }
   walk((await ui.drawn()) as unknown as Node)
   const holds = (row: Node[], re: RegExp) => row.some(c => re.test(textOf(c)))
-  expect(rows.some(r => holds(r, /^REPO$/))).toBe(true)
-  expect(rows.some(r => holds(r, /^REPO$/) && holds(r, /kemory plugin live/))).toBe(false)
+  expect(rows.some(r => holds(r, /^Kemory knows this about the repo$/))).toBe(true)
+  expect(rows.some(r => holds(r, /^Kemory knows this about the repo$/) && holds(r, /kemory plugin live/))).toBe(false)
 })
 
 // The update check reads the panel's own manifest, both repositories' latest

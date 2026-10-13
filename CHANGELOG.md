@@ -5,6 +5,17 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.16.0]
+
+### Changed
+- **Cards read like a sentence.** The header says what happened in plain
+  words ("Saved to Kemory", "Recalled from Kemory", "Kemory knows this about
+  the repo") with a status dot for the kind, the namespace tag, the
+  SeKondBrain mark on desktop, and "Open ↗" on the right. The title is bold
+  text, with one grey line of the memory under it. "Show more" opens the whole
+  memory and its Helpful, Outdated and Delete actions; "Show less" closes it.
+  This replaces the capitalised label and the `▸` title button.
+
 ## [0.15.1]
 
 ### Fixed
