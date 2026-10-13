@@ -5,6 +5,18 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.17.0]
+
+### Added
+- **Which organisation you write to.** One account can belong to several
+  organisations, and this plugin (your local Kemory login, `kemory use`) and
+  the claude.ai Kemory connector (its own sign-in) can each be on a different
+  one. The status line now reads `✓ SeKondBrain`, and the panel header names
+  it too. When the connector writes to a different organisation, the status
+  line adds `⚠ connector on <name>`, the panel says which saves go where, and
+  a toast gives the command that brings them together
+  (`kemory use "<name>"`).
+
 ## [0.16.1]
 
 ### Changed
