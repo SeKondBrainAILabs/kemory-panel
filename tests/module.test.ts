@@ -389,3 +389,23 @@ test('an outdated kemory-panel is named with its own versions', async ($, on) =>
   expect(toast).toContain("'claude plugin update kemory-panel@kemory'")
   expect(toast).not.toContain("'claude plugin update kemory@kemory'")
 })
+
+test('a live connector is explained in the panel, not on the status line', async ($, on) => {
+  mock.env(on, {})
+  const statuses: string[] = []
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text ?? '')
+    return answer()
+  })
+  on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
+  on('mcp.call', () => answer({ content: [{ type: 'text', text: '{"user":"k"}' }], isError: false }))
+  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+
+  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+
+  expect(statuses.some(t => t.includes('connector'))).toBe(false)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(PANE(surface))
+    expect(await ui.find({ text: /Using the claude\.ai Kemory connector/ })).toBeTruthy()
+  }
+})

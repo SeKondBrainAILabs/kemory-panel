@@ -5,6 +5,14 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.16.1]
+
+### Changed
+- The status line no longer says `via connector`. It shows only what you can
+  act on or count: `✓`, this session's recalled and saved counts, a problem
+  with its fix, or an update. When the claude.ai Kemory connector is live, the
+  panel explains that this plugin's duplicate tools are behind tool search.
+
 ## [0.16.0]
 
 ### Changed
