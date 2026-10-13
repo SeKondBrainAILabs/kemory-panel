@@ -5,6 +5,13 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.17.2]
+
+### Changed
+- The panel no longer explains the claude.ai connector when it and this
+  plugin write to the same organisation; there is nothing to act on. The
+  warning for a connector on a different organisation stays.
+
 ## [0.17.1]
 
 ### Fixed

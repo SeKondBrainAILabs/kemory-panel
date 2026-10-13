@@ -927,12 +927,6 @@ export const register: Register = on => {
                 connector, which writes to {orgMismatch()}. Run kemory use "{orgMismatch()}" in a terminal to use one.
               </Text>
             )}
-            {connector && (
-              <Text color={BRAND.grey}>
-                Using the claude.ai Kemory connector. This plugin's copies of the same tools are behind tool search,
-                so each request carries one set.
-              </Text>
-            )}
             <Box gap={1}>
               <Button
                 key="pane-learn"

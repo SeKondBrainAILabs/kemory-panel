@@ -390,7 +390,7 @@ test('an outdated kemory-panel is named with its own versions', async ($, on) =>
   expect(toast).not.toContain("'claude plugin update kemory@kemory'")
 })
 
-test('a live connector is explained in the panel, not on the status line', async ($, on) => {
+test('a live connector on the same organisation adds nothing to the panel or the status line', async ($, on) => {
   mock.env(on, {})
   const statuses: string[] = []
   on('ui.status', (_$, e) => {
@@ -406,7 +406,7 @@ test('a live connector is explained in the panel, not on the status line', async
   expect(statuses.some(t => t.includes('connector'))).toBe(false)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(PANE(surface))
-    expect(await ui.find({ text: /Using the claude\.ai Kemory connector/ })).toBeTruthy()
+    expect(await ui.find({ text: /connector/ })).toBeUndefined()
   }
 })
 
