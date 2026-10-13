@@ -5,6 +5,14 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.18.0]
+
+### Changed
+- Transcript cards for a save or recall are drawn in the terminal only. On
+  desktop the Kemory server's own MCP App cards show each save and recall, in
+  every app that supports them, so one call no longer has two card designs.
+  The status line, the band above the prompt and the panel are unchanged.
+
 ## [0.17.2]
 
 ### Changed

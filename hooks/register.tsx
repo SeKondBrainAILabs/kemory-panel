@@ -876,7 +876,11 @@ export const register: Register = on => {
 
   // A group of calls draws as one count line ("Used 2 tools"). Unfolded, each
   // call is its own row, and a Kemory call's row can draw as a card.
+  // Transcript cards are drawn in the terminal only. Elsewhere the Kemory
+  // server's own MCP App cards (ui://kemory/memory-saved, recall-results) show
+  // each save and recall, in every app that supports them; one card per call.
   on('ui.render', { component: 'ToolGroup' }, ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)
     const holdsKemory = e.props.calls.some(c => !!c.tool_use_id && byCall.has(c.tool_use_id))
     if (!holdsKemory || e.props.isExpanded) return next(e)
 
@@ -885,6 +889,7 @@ export const register: Register = on => {
 
   // The transcript row of a save or recall becomes one card per memory.
   on('ui.render', { component: 'ToolUse' }, ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)
     const keys = byCall.get(e.props.tool_use_id)
     if (!keys || keys.length === 0) return next(e)
     const els = $.ui.resolve(e)

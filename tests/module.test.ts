@@ -54,8 +54,13 @@ test('prompt recall shows in the band and counts on the status line', async ($, 
   }
 })
 
-test('a store call becomes a card and a toast', async ($, on) => {
+test('a store call becomes a card in the terminal and a toast everywhere', async ($, on) => {
   mock.env(on, {})
+  // What the app draws for the row when no plugin answers it.
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e as never) as unknown as { Text: unknown }
+    return h(Text as never, null, 'app row') as never
+  })
   const toasts: string[] = []
   on('ui.status', () => answer())
   on('ui.toast', (_$, e) => {
@@ -75,7 +80,26 @@ test('a store call becomes a card and a toast', async ($, on) => {
   await $.tool.call({ tool: 'mcp__plugin_kemory_kemory__kemory_store_memory', content, namespace: 'shared' })
 
   expect(toasts.at(-1)).toBe('Saved to shared: "Why does the band show nothing on a short prompt?"')
-  for (const surface of SURFACES) {
+  // On desktop the Kemory server's own MCP App card shows the save; the plugin
+  // leaves the row to the app.
+  const row = (surface: (typeof SURFACES)[number]) =>
+    ({
+      plugin: 'kemory-panel',
+      surface,
+      component: 'ToolUse',
+      props: {
+        tool_use_id: callId,
+        tool: 'mcp__plugin_kemory_kemory__kemory_store_memory',
+        input: { content },
+        isRunning: false,
+        isErrored: false,
+        isInterrupted: false,
+      },
+    }) as never
+  const desktop = await $.ui.mount(row('desktop'))
+  expect(await desktop.find({ text: 'app row' })).toBeTruthy()
+  expect(await desktop.find({ text: 'Saved to Kemory' })).toBeUndefined()
+  for (const surface of ['terminal'] as const) {
     const ui = await $.ui.mount({
       plugin: 'kemory-panel',
       surface,
