@@ -5,6 +5,19 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.15.1]
+
+### Fixed
+- The update notice compared this plugin's version with the kemory plugin's.
+  Since the two release on their own, it showed `↑ 0.15.1 available` while
+  both were current, and asked you to update a plugin that was already up to
+  date. Each plugin is now checked against its own repository, and the status
+  line and toast name the plugin (`↑ kemory 0.15.1`).
+- When the kemory plugin is not installed, the notice now gives the install
+  command instead of an update command that fails with "not installed".
+- `scripts/lib.sh` matches the kemory plugin's copy again, which gained Grok
+  Build detection in kemory 0.15.
+
 ## [0.15.0]
 
 ### Changed

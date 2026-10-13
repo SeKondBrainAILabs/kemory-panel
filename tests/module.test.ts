@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
+import { type Engine, expect, mock, test } from 'claude-code/testing'
 
 // The module under test reads the session through these events; each test
 // answers the ones its path reaches. Unanswered, the kit's bottom throws.
@@ -271,4 +272,111 @@ test('the repo brief keeps strong matches only, each card with its title on a li
   const holds = (row: Node[], re: RegExp) => row.some(c => re.test(textOf(c)))
   expect(rows.some(r => holds(r, /^REPO$/))).toBe(true)
   expect(rows.some(r => holds(r, /^REPO$/) && holds(r, /kemory plugin live/))).toBe(false)
+})
+
+// The update check reads the panel's own manifest, both repositories' latest
+// manifests and installed_plugins.json, and toasts the commands once.
+function updateCheck(
+  on: On,
+  v: { running: string; latestPanel: string; latestKemory: string; installed: Record<string, string> },
+) {
+  const toasts: string[] = []
+  const statuses: string[] = []
+  mock.env(on, { HOME: '/home/k' })
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text ?? '')
+    return answer()
+  })
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return answer()
+  })
+  on('tool.list', () => answer([]))
+  on('session.root', () => answer('/home/k/src/app'))
+  on('session.surfaces', () => answer(['desktop']))
+  on('process.run', () => answer({ stdout: '200', stderr: '', code: 0 }))
+  on('mcp.call', () => answer({ content: [], isError: false }))
+  on('http.fetch', (_$, e) =>
+    answer({
+      ok: true,
+      status: 200,
+      text: JSON.stringify({ version: String(e.url).includes('kemory-panel') ? v.latestPanel : v.latestKemory }),
+    }),
+  )
+  on('fs.read', (_$, e) => {
+    const path = String((e as { path?: string }).path ?? e)
+    if (path.endsWith('installed_plugins.json')) {
+      const plugins = Object.fromEntries(Object.entries(v.installed).map(([n, ver]) => [`${n}@kemory`, [{ version: ver }]]))
+      return answer(JSON.stringify({ plugins }))
+    }
+    return answer(JSON.stringify({ version: v.running }))
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+
+  return { toasts, statuses }
+}
+
+const start = async ($: Engine, on: On) => {
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/home/k/src/app', surface: 'desktop', isInteractive: true })
+  await clock.settle()
+}
+
+test('each plugin is checked against its own latest version', async ($, on) => {
+  const { toasts, statuses } = updateCheck(on, {
+    running: '0.15.0',
+    latestPanel: '0.15.0',
+    latestKemory: '0.15.1',
+    installed: { kemory: '0.15.1', 'kemory-panel': '0.15.0' },
+  })
+  await start($, on)
+
+  expect(toasts.some(t => /is out|not installed/.test(t))).toBe(false)
+  expect(statuses.at(-1)).not.toContain('↑')
+})
+
+test('an outdated kemory is named with its own versions and its update command', async ($, on) => {
+  const { toasts, statuses } = updateCheck(on, {
+    running: '0.15.0',
+    latestPanel: '0.15.0',
+    latestKemory: '0.15.1',
+    installed: { kemory: '0.14.0', 'kemory-panel': '0.15.0' },
+  })
+  await start($, on)
+
+  const toast = toasts.find(t => t.includes('is out')) ?? ''
+  expect(toast).toContain('kemory 0.15.1 is out (you have 0.14.0)')
+  expect(toast).toContain("'claude plugin update kemory@kemory'")
+  expect(toast).not.toContain('kemory-panel@kemory')
+  expect(statuses.at(-1)).toContain('↑ kemory 0.15.1')
+})
+
+test('a missing kemory plugin gets an install command, not an update', async ($, on) => {
+  const { toasts, statuses } = updateCheck(on, {
+    running: '0.15.0',
+    latestPanel: '0.15.0',
+    latestKemory: '0.15.1',
+    installed: { 'kemory-panel': '0.15.0' },
+  })
+  await start($, on)
+
+  const toast = toasts.find(t => t.includes('not installed')) ?? ''
+  expect(toast).toContain("'claude plugin install kemory@kemory'")
+  expect(toast).not.toContain('update')
+  expect(statuses.at(-1)).toContain('kemory plugin not installed')
+})
+
+test('an outdated kemory-panel is named with its own versions', async ($, on) => {
+  const { toasts } = updateCheck(on, {
+    running: '0.15.0',
+    latestPanel: '0.16.0',
+    latestKemory: '0.15.1',
+    installed: { kemory: '0.15.1', 'kemory-panel': '0.15.0' },
+  })
+  await start($, on)
+
+  const toast = toasts.find(t => t.includes('is out')) ?? ''
+  expect(toast).toContain('kemory-panel 0.16.0 is out (you have 0.15.0)')
+  expect(toast).toContain("'claude plugin update kemory-panel@kemory'")
+  expect(toast).not.toContain("'claude plugin update kemory@kemory'")
 })
