@@ -5,6 +5,13 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.17.1]
+
+### Fixed
+- The status check follows the organisation `kemory use` selected, like the
+  kemory plugin's hooks since kemory 0.15.2: `scripts/lib.sh` is synced with
+  kemory's copy, which sends `X-Organization-ID`.
+
 ## [0.17.0]
 
 ### Added
