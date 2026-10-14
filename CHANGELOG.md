@@ -17,6 +17,10 @@ kemory marketplace: `/plugin install kemory-plus@kemory`.
   command to run instead. The status line still cannot be clicked, so it keeps
   showing `↑ kemory <version>`.
 
+### Fixed
+- `scripts/lib.sh` matches the kemory plugin's copy again (kemory 0.16.0 added
+  `kemory_active_org`).
+
 ## [0.18.0]
 
 ### Changed
