@@ -16,6 +16,7 @@ covers what that plugin sends.
 | Session start, then every 10 minutes | A request for the latest version numbers of the kemory plugin and this one, to tell you about updates | `raw.githubusercontent.com` (a public file; nothing of yours is sent) |
 | Session start | A search for what Kemory knows about the folder you opened, using its name | Your Kemory instance, through the kemory plugin |
 | Session start and the first three prompts, while the claude.ai Kemory connector is connected | A `kemory_whoami` call through that connector, to check it is live before hiding this plugin's duplicate tools | Your Kemory instance, through the connector |
+| You press Update or Install | Runs the `claude` command on your machine to refresh the kemory marketplace and update the plugin, which downloads it from GitHub | GitHub, through Claude Code's own plugin update |
 | You press Save, Helpful, Outdated or Delete, or run `/kemory-panel:remember` | That memory, rating or deletion | Your Kemory instance, through the kemory plugin |
 | You press Suggest memories, or run `/kemory-panel:learned` | Nothing new: Claude reads the session it is already in and proposes facts. Nothing is saved until you press Save | Your own Claude Code session |
 

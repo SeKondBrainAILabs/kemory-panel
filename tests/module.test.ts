@@ -311,8 +311,9 @@ test('the repo brief keeps strong matches only, each card with its title on a li
 // manifests and installed_plugins.json, and toasts the commands once.
 function updateCheck(
   on: On,
-  v: { running: string; latestPanel: string; latestKemory: string; installed: Record<string, string> },
+  v: { running: string; latestPanel: string; latestKemory: string; installed: Record<string, string>; exit?: number },
 ) {
+  const runs: string[][] = []
   const toasts: string[] = []
   const statuses: string[] = []
   mock.env(on, { HOME: '/home/k' })
@@ -327,7 +328,13 @@ function updateCheck(
   on('tool.list', () => answer([]))
   on('session.root', () => answer('/home/k/src/app'))
   on('session.surfaces', () => answer(['desktop']))
-  on('process.run', () => answer({ stdout: '200', stderr: '', code: 0 }))
+  on('process.run', (_$, e) => {
+    if (e.argv.includes('plugin')) {
+      runs.push(e.argv.slice(4))
+      return answer({ stdout: '', stderr: '', exitCode: v.exit ?? 0, isStdoutTruncated: false, isStderrTruncated: false })
+    }
+    return answer({ stdout: '200', stderr: '', exitCode: 0, isStdoutTruncated: false, isStderrTruncated: false })
+  })
   on('mcp.call', () => answer({ content: [], isError: false }))
   on('http.fetch', (_$, e) =>
     answer({
@@ -346,7 +353,7 @@ function updateCheck(
   })
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
 
-  return { toasts, statuses }
+  return { toasts, statuses, runs }
 }
 
 const start = async ($: Engine, on: On) => {
@@ -489,4 +496,42 @@ test('a connector on another organisation is flagged, with the command to fix it
   expect(toasts.filter(t => t.includes('connector writes to'))).toHaveLength(1)
   const ui = await $.ui.mount(PANE('desktop'))
   expect(await ui.find({ text: /Claude's own saves go through the claude\.ai/ })).toBeTruthy()
+})
+
+test('the band offers an Update button that runs the update and says to open a new session', async ($, on) => {
+  const { runs } = updateCheck(on, {
+    running: '0.18.0',
+    latestPanel: '0.18.0',
+    latestKemory: '0.16.0',
+    installed: { kemory: '0.15.4', 'kemory-panel': '0.18.0' },
+  })
+  await start($, on)
+
+  const band = await $.ui.mount(BAND('desktop'))
+  expect(await band.find({ text: 'Kemory 0.16.0 is out (you have 0.15.4).' })).toBeTruthy()
+  await band.press({ key: 'update-run-band' } as never)
+  expect(runs).toEqual([
+    ['plugin', 'marketplace', 'update', 'kemory'],
+    ['plugin', 'update', 'kemory@kemory'],
+  ])
+  expect(await band.find({ text: 'Updated. Open a new session to use it.' })).toBeTruthy()
+  expect(await band.find({ type: 'Button', text: 'Update' })).toBeUndefined()
+})
+
+test('an update that cannot find claude says what to run instead', async ($, on) => {
+  updateCheck(on, {
+    running: '0.18.0',
+    latestPanel: '0.18.0',
+    latestKemory: '0.16.0',
+    installed: { kemory: '0.15.4', 'kemory-panel': '0.18.0' },
+    exit: 127,
+  })
+  await start($, on)
+
+  const pane = await $.ui.mount(PANE('terminal'))
+  await pane.press({ key: 'update-run-pane' } as never)
+  expect(
+    await pane.find({ text: 'Could not find the claude command. Run claude plugin update kemory@kemory in a terminal.' }),
+  ).toBeTruthy()
+  expect(await pane.find({ type: 'Button', text: 'Update' })).toBeTruthy()
 })

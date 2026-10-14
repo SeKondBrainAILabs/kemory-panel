@@ -5,6 +5,18 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.19.0]
+
+### Added
+- **An Update button.** When kemory or kemory-panel has a new version (or
+  kemory is not installed), the band above the prompt and the panel show it
+  with an Update (or Install) button. It runs `claude plugin marketplace update
+  kemory` and `claude plugin update <plugin>@kemory`, then says to open a new
+  session, which is when the new version loads. It finds the `claude` command
+  even when the session's PATH lacks it, and when it cannot, it says which
+  command to run instead. The status line still cannot be clicked, so it keeps
+  showing `↑ kemory <version>`.
+
 ## [0.18.0]
 
 ### Changed
