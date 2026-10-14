@@ -110,6 +110,12 @@ let stale: string | undefined
 // The notice the update toast last carried, so it appears once per session
 // per release, not on every recheck.
 let toldUpdateFor: string | undefined
+// What the last check found to install or update, for the Update button, and
+// how pressing it went. The new version loads in the next session.
+let pending: { verb: 'install' | 'update'; name: PluginName }[] = []
+let pendingNotice = ''
+let updateState: 'idle' | 'running' | 'done' | 'failed' = 'idle'
+let updateNote = ''
 const entries: Entry[] = []
 const byCall = new Map<string, string[]>()
 const isOpen = new Set<string>()
@@ -354,6 +360,8 @@ async function check($: Engine) {
   }
   stale = facts.length > 0 ? facts.join(' · ') : undefined
   const notice = notices.join('; ')
+  pending = actions
+  pendingNotice = notice
   if (actions.length > 0 && toldUpdateFor !== notice) {
     toldUpdateFor = notice
     $.ui.toast(`Kemory: ${notice}. ${await commandHint($, actions)}`, { timeoutMs: 12000 })
@@ -362,6 +370,78 @@ async function check($: Engine) {
   if (problem && problem !== was) $.ui.toast(`Kemory: ${problem}`)
   await warnOrgMismatch($)
   draw($)
+}
+
+// Finds the claude CLI and runs it with the given arguments, or exits 127.
+// The session's PATH may lack it (a desktop app, a PATH set only in .zshrc),
+// so the usual install locations come next, then the person's own shell.
+const RUN_CLAUDE = `
+c=$(command -v claude 2>/dev/null)
+for p in "$c" "$HOME/.local/bin/claude" "$HOME/.claude/local/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
+  [ -n "$p" ] && [ -x "$p" ] && exec "$p" "$@"
+done
+c=$("\${SHELL:-/bin/zsh}" -lic 'command -v claude' 2>/dev/null | tail -1)
+[ -n "$c" ] && [ -x "$c" ] && exec "$c" "$@"
+exit 127
+`
+
+// The Update button. Runs what a person would run in a terminal: refresh the
+// kemory marketplace, then install or update each plugin the check named.
+async function runUpdate($: Engine) {
+  if (updateState === 'running' || pending.length === 0) return
+  updateState = 'running'
+  redraw($)
+  const steps = [
+    ['plugin', 'marketplace', 'update', 'kemory'],
+    ...pending.map(a => ['plugin', a.verb, `${a.name}@kemory`]),
+  ]
+  for (const args of steps) {
+    const run = await $.process
+      .run(['bash', '-c', RUN_CLAUDE, 'claude', ...args], { timeoutMs: 180000 })
+      .catch(() => undefined)
+    if (!run || run.exitCode !== 0) {
+      updateState = 'failed'
+      const manual = pending.map(a => `claude plugin ${a.verb} ${a.name}@kemory`).join(' && ')
+      updateNote =
+        run?.exitCode === 127
+          ? `Could not find the claude command. Run ${manual} in a terminal.`
+          : `Update failed (claude ${args.join(' ')}). Run ${manual} in a terminal.`
+      redraw($)
+      return
+    }
+  }
+  updateState = 'done'
+  pending = []
+  stale = undefined
+  redraw($)
+}
+
+// One row saying an update is out, with the button, or how pressing it went.
+// biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
+function updateRow($: Engine, els: Record<string, any>, at: string) {
+  const { Box, Button, Text } = els
+  if (updateState === 'idle' && pending.length === 0) return null
+  const text = {
+    idle: `${pendingNotice.charAt(0).toUpperCase()}${pendingNotice.slice(1)}.`,
+    running: 'Updating…',
+    done: 'Updated. Open a new session to use it.',
+    failed: updateNote,
+  }[updateState]
+
+  return (
+    <Box key={`update-${at}`} gap={1}>
+      <Text color={updateState === 'failed' ? BRAND.danger : BRAND.yellow}>●</Text>
+      <Text>{text}</Text>
+      {(updateState === 'idle' || updateState === 'failed') && pending.length > 0 && (
+        <Button
+          key={`update-run-${at}`}
+          label={pending.some(a => a.verb === 'install') ? 'Install' : 'Update'}
+          variant="primary"
+          onPress={() => void runUpdate($)}
+        />
+      )}
+    </Box>
+  )
 }
 
 // One Kemory server is enough. When the claude.ai connector is live in this
@@ -837,12 +917,15 @@ export const register: Register = on => {
   // prompt's recall put in context, as a row of namespace chips and titles.
   on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
     if (e.props.hasSurvey || isBandHidden) return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const els = $.ui.resolve(e)
+    const { Box, Button, Text } = els
     const briefs = entries.filter(m => m.kind === 'brief')
     const shown = hasPrompted ? inContext.map(find).filter((x): x is Entry => !!x) : briefs
-    if (shown.length === 0) return next(e)
+    const update = updateRow($, els, 'band')
+    if (shown.length === 0 && !update) return next(e)
     const noun = shown.length === 1 ? 'memory' : 'memories'
-    const heading = hasPrompted ? `${shown.length} ${noun} in context` : `knows this about ${repoName}`
+    const heading =
+      shown.length === 0 ? '' : hasPrompted ? `${shown.length} ${noun} in context` : `knows this about ${repoName}`
     const more = shown.length - BAND_ROWS
 
     return (
@@ -863,6 +946,7 @@ export const register: Register = on => {
             }}
           />
         </Box>
+        {update}
         {shown.slice(0, BAND_ROWS).map(m => (
           <Box key={`band-${m.key}`} gap={1}>
             {tag(Text, m.namespace)}
@@ -926,6 +1010,7 @@ export const register: Register = on => {
               <Text color={BRAND.mint}>●</Text>
               <Text color={BRAND.grey}> RATED {rated}</Text>
             </Text>
+            {updateRow($, els, 'pane')}
             {orgMismatch() && (
               <Text color={BRAND.danger}>
                 This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
