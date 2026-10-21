@@ -223,7 +223,7 @@ for (const surface of SURFACES) {
 
     await ui.press({ key: 'sug-save-s-0' } as never)
     expect(await ui.find({ text: /Could not save/ })).toBeUndefined()
-    expect(await ui.find({ text: /SAVED 1/ })).toBeTruthy()
+    expect(await ui.find({ text: /1 saved/ })).toBeTruthy()
   })
 }
 
@@ -249,7 +249,7 @@ test('a save made while the server is still connecting is tried again', async ($
   await pressed
 
   expect(calls).toBe(2)
-  expect(await ui.find({ text: /SAVED 1/ })).toBeTruthy()
+  expect(await ui.find({ text: /1 saved/ })).toBeTruthy()
 })
 
 const recallOf = (memories: { id: string; ns: string; text: string; score: number }[]) => ({

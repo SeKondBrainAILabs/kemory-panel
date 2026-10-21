@@ -5,6 +5,16 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.20.2]
+
+### Changed
+- **A calmer panel.** The mark is small and sits beside the title instead of
+  taking a column, so the panel uses its full width. The header, the counts,
+  the workspace picker and the actions are plain sections rather than one
+  boxed card. The workspace hint is one line, the hint under the actions is
+  gone, and Suggest memories is a normal button: the primary style is kept
+  for "Use <organisation> for both", the one action that fixes something.
+
 ## [0.20.1]
 
 ### Fixed
