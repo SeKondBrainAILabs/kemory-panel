@@ -5,6 +5,15 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.20.1]
+
+### Fixed
+- The Workspace picker could not fix the warning it was meant for. When the
+  plugin was already on the right organisation and only the claude.ai
+  connector was on another, the picker showed the right one, and picking it
+  did nothing. Picking it now moves the connector too, and the warning has a
+  **Use <organisation> for both** button that does the same.
+
 ## [0.20.0]
 
 ### Added
