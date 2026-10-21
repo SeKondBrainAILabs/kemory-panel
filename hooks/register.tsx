@@ -104,8 +104,14 @@ let connectorChecks = 0
 // to several, and the plugin (local credential, `kemory use`) and the claude.ai
 // connector (its own sign-in) can each be on a different one.
 let orgName: string | undefined
+let orgId: string | undefined
 let connectorOrg: string | undefined
 let toldOrgMismatch = false
+// The organisations the account belongs to, for the workspace picker, and how
+// the last pick went.
+let orgs: { id: string; name: string }[] = []
+let orgState: 'idle' | 'switching' | 'failed' = 'idle'
+let orgNote = ''
 let stale: string | undefined
 // The notice the update toast last carried, so it appears once per session
 // per release, not on every recheck.
@@ -195,11 +201,11 @@ function orgMismatch(): string | undefined {
   return connector && orgName && connectorOrg && connectorOrg !== orgName ? connectorOrg : undefined
 }
 
-function orgOf(result: McpToolResult): string | undefined {
+function orgOf(result: McpToolResult, field: 'org_name' | 'org_id' = 'org_name'): string | undefined {
   try {
-    const name = JSON.parse(textOf(result)).org_name
+    const value = JSON.parse(textOf(result))[field]
 
-    return typeof name === 'string' && name ? name : undefined
+    return typeof value === 'string' && value ? value : undefined
   } catch {
     return undefined
   }
@@ -214,9 +220,59 @@ async function warnOrgMismatch($: Engine) {
   toldOrgMismatch = true
   $.ui.toast(
     `Kemory: the plugin writes to ${orgName} but the claude.ai connector writes to ${other}. ` +
-      `To use one, run 'kemory use "${other}"' in a terminal, then open a new session.`,
+      'Pick one under Workspace in /kemory-panel:memories to use it for both.',
     { timeoutMs: 15000 },
   )
+}
+
+async function loadOrgs($: Engine) {
+  const run = await $.process
+    .run(['bash', `${$.plugin.root}/scripts/org.sh`, 'list'], { timeoutMs: 15000 })
+    .catch(() => undefined)
+  if (!run || run.exitCode !== 0) return
+  try {
+    const list = JSON.parse(run.stdout)
+    if (!Array.isArray(list)) return
+    orgs = list
+      .filter(o => typeof o?.org_id === 'string')
+      .map(o => ({ id: o.org_id as string, name: typeof o.name === 'string' && o.name ? o.name : (o.org_id as string) }))
+    redraw($)
+  } catch {
+    // An unreadable list leaves the picker out.
+  }
+}
+
+// The workspace picker. A person's pick, never the model's: a switch the model
+// could call would let a stored memory redirect where later memories go.
+// org.sh moves the connector (the account's stored selection) and the plugin
+// (the credential file); both servers are then asked where they now write.
+async function switchOrg($: Engine, id: string) {
+  if (orgState === 'switching' || id === orgId) return
+  orgState = 'switching'
+  redraw($)
+  const run = await $.process
+    .run(['bash', `${$.plugin.root}/scripts/org.sh`, 'use', id], { timeoutMs: 20000 })
+    .catch(() => undefined)
+  if (!run || run.exitCode !== 0) {
+    orgState = 'failed'
+    orgNote = `Could not switch: ${run?.stdout.trim() || 'the switch did not run'}.`
+    redraw($)
+    return
+  }
+  const me = await callKemory($, 'kemory_whoami', {})
+  if (!me.isError) {
+    orgName = orgOf(me) ?? orgName
+    orgId = orgOf(me, 'org_id') ?? orgId
+  }
+  if (connector) {
+    const answer = await $.mcp.call(connector, 'kemory_whoami', {}).catch(() => undefined)
+    if (answer && !answer.isError) connectorOrg = orgOf(answer)
+  }
+  orgState = 'idle'
+  toldOrgMismatch = false
+  $.ui.toast(`Kemory: now writing to ${orgName}`)
+  await warnOrgMismatch($)
+  redraw($)
 }
 
 function redraw($: Engine) {
@@ -325,7 +381,11 @@ async function check($: Engine) {
     versionsOnDisk($),
     callKemory($, 'kemory_whoami', {}),
   ])
-  if (!me.isError) orgName = orgOf(me) ?? orgName
+  if (!me.isError) {
+    orgName = orgOf(me) ?? orgName
+    orgId = orgOf(me, 'org_id') ?? orgId
+  }
+  if (orgs.length === 0) void loadOrgs($)
   const code = run?.stdout.trim() || '000'
   const was = problem
   problem = code === '200' ? undefined : (PROBLEMS[code] ?? `API returned HTTP ${code}`)
@@ -440,6 +500,32 @@ function updateRow($: Engine, els: Record<string, any>, at: string) {
           onPress={() => void runUpdate($)}
         />
       )}
+    </Box>
+  )
+}
+
+// The workspace picker, where the surface draws a Select and the account has
+// more than one organisation.
+// biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
+function orgRow($: Engine, els: Record<string, any>) {
+  const { Box, Select, Text } = els
+  if (!Select || orgs.length < 2) return null
+
+  return (
+    <Box key="org" flexDirection="column">
+      <Select
+        key="pane-org"
+        label="Workspace"
+        options={orgs.map(o => ({ value: o.id, label: o.name }))}
+        value={orgId}
+        onSelect={(id: string) => void switchOrg($, id)}
+      />
+      {orgState === 'switching' && <Text color={BRAND.grey}>Switching…</Text>}
+      {orgState === 'failed' && <Text color={BRAND.danger}>{orgNote}</Text>}
+      <Text color={BRAND.grey}>
+        Moves this panel, the kemory hooks and every Kemory connector on your account (claude.ai included) to the
+        workspace you pick.
+      </Text>
     </Box>
   )
 }
@@ -1011,10 +1097,11 @@ export const register: Register = on => {
               <Text color={BRAND.grey}> RATED {rated}</Text>
             </Text>
             {updateRow($, els, 'pane')}
+            {orgRow($, els)}
             {orgMismatch() && (
               <Text color={BRAND.danger}>
                 This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
-                connector, which writes to {orgMismatch()}. Run kemory use "{orgMismatch()}" in a terminal to use one.
+                connector, which writes to {orgMismatch()}. Pick one under Workspace to use it for both.
               </Text>
             )}
             <Box gap={1}>

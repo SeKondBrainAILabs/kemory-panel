@@ -492,7 +492,7 @@ test('a connector on another organisation is flagged, with the command to fix it
   expect(statuses.at(-1)).toContain('⚠ connector on SeKondBrain')
   const toast = toasts.find(t => t.includes('connector')) ?? ''
   expect(toast).toContain('the plugin writes to StressTest but the claude.ai connector writes to SeKondBrain')
-  expect(toast).toContain(`'kemory use "SeKondBrain"'`)
+  expect(toast).toContain('Pick one under Workspace')
   expect(toasts.filter(t => t.includes('connector writes to'))).toHaveLength(1)
   const ui = await $.ui.mount(PANE('desktop'))
   expect(await ui.find({ text: /Claude's own saves go through the claude\.ai/ })).toBeTruthy()
@@ -534,4 +534,76 @@ test('an update that cannot find claude says what to run instead', async ($, on)
     await pane.find({ text: 'Could not find the claude command. Run claude plugin update kemory@kemory in a terminal.' }),
   ).toBeTruthy()
   expect(await pane.find({ type: 'Button', text: 'Update' })).toBeTruthy()
+})
+
+// org.sh answers `list` with the account's organisations and `use` by moving
+// both servers, as the real script does; `refuse` makes `use` fail.
+const ORGS = [
+  { org_id: '9cc78806-6ce0-4670-8ab1-1119f2a02cfb', name: 'SeKondBrain' },
+  { org_id: '7e80dc63-b955-48ec-bb1b-3de632990e52', name: 'StressTest' },
+]
+
+function workspaces(on: On, refuse?: string) {
+  const uses: string[] = []
+  const toasts: string[] = []
+  let plugin = ORGS[1]
+  let conn = ORGS[1]
+  mock.env(on, { HOME: '/home/k' })
+  on('ui.status', () => answer())
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return answer()
+  })
+  on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
+  on('session.root', () => answer('/home/k/src/app'))
+  on('session.surfaces', () => answer(['desktop']))
+  on('http.fetch', () => answer({ ok: false, status: 404, text: '' }))
+  on('fs.read', () => answer('{"plugins":{"kemory@kemory":[{"version":"0.15.1"}]}}'))
+  on('process.run', (_$, e) => {
+    const done = (stdout: string, exitCode = 0) =>
+      answer({ stdout, stderr: '', exitCode, isStdoutTruncated: false, isStderrTruncated: false })
+    if (!String(e.argv[1]).endsWith('org.sh')) return done('200')
+    if (e.argv[2] === 'list') return done(JSON.stringify(ORGS))
+    if (refuse) return done(refuse, 1)
+    const id = String(e.argv[3])
+    uses.push(id)
+    plugin = ORGS.find(o => o.org_id === id) ?? plugin
+    conn = plugin
+    return done('ok')
+  })
+  on('mcp.call', (_$, e) => {
+    if (e.tool !== 'kemory_whoami') return answer({ content: [], isError: false })
+    const o = e.server === 'conn-1' ? conn : plugin
+    return answer({ content: [{ type: 'text', text: JSON.stringify({ org_id: o?.org_id, org_name: o?.name }) }], isError: false })
+  })
+  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+
+  return { uses, toasts }
+}
+
+test('the panel picks a workspace and both servers follow it', async ($, on) => {
+  const { uses, toasts } = workspaces(on)
+  await start($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+
+  const ui = await $.ui.mount(PANE('desktop'))
+  expect(await ui.find({ type: 'Select' })).toBeTruthy()
+  await ui.select({ key: 'pane-org', value: ORGS[0].org_id } as never)
+
+  expect(uses).toEqual([ORGS[0].org_id])
+  expect(toasts).toContain('Kemory: now writing to SeKondBrain')
+  expect(await ui.find({ text: / · SeKondBrain/ })).toBeTruthy()
+  expect(await ui.find({ text: /connector, which writes to/ })).toBeUndefined()
+})
+
+test('a refused switch says why and leaves the workspace as it was', async ($, on) => {
+  workspaces(on, 'you are not a member of that organisation')
+  await start($, on)
+
+  const ui = await $.ui.mount(PANE('terminal'))
+  await ui.select({ key: 'pane-org', value: ORGS[0].org_id } as never)
+
+  expect(await ui.find({ text: 'Could not switch: you are not a member of that organisation.' })).toBeTruthy()
+  expect(await ui.find({ text: / · StressTest/ })).toBeTruthy()
 })
