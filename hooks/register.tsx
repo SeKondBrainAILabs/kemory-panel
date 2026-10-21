@@ -524,10 +524,7 @@ function orgRow($: Engine, els: Record<string, any>) {
       />
       {orgState === 'switching' && <Text color={BRAND.grey}>Switching…</Text>}
       {orgState === 'failed' && <Text color={BRAND.danger}>{orgNote}</Text>}
-      <Text color={BRAND.grey}>
-        Moves this panel, the kemory hooks and every Kemory connector on your account (claude.ai included) to the
-        workspace you pick.
-      </Text>
+      <Text color={BRAND.grey}>Applies to every Kemory connector on your account.</Text>
     </Box>
   )
 }
@@ -1080,58 +1077,55 @@ export const register: Register = on => {
     const open = suggestions.filter(s => s.state !== 'skipped')
     const svg = 'Svg' in els ? (els as unknown as { Svg: (p: Record<string, unknown>) => never }).Svg : undefined
 
+    // Plain sections, full width: a small mark beside the title rather than a
+    // column of its own, one hint line where one is needed, and the primary
+    // style kept for the one action that fixes something.
     return (
       <Box flexDirection="column" gap={1}>
-        <Box gap={2} alignItems="center" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
-          {svg && svg({ key: 'mark', source: logomark(56), alt: 'Kemory', width: 56, height: 56 })}
-          <Box flexDirection="column">
+        <Box flexDirection="column">
+          <Box gap={1} alignItems="center">
+            {svg && svg({ key: 'mark', source: logomark(18), alt: 'Kemory', width: 18, height: 18 })}
             <Text>
               <Text bold>Kemory</Text>
               {orgName && <Text color={BRAND.grey}> · {orgName}</Text>}
-              <Text color={BRAND.grey}> · this session</Text>
-            </Text>
-            <Text>
-              <Text color={BRAND.purple}>●</Text>
-              <Text color={BRAND.grey}> SAVED {saved}   </Text>
-              <Text color={BRAND.blue}>●</Text>
-              <Text color={BRAND.grey}> RECALLED {recalled}   </Text>
-              <Text color={BRAND.mint}>●</Text>
-              <Text color={BRAND.grey}> RATED {rated}</Text>
-            </Text>
-            {updateRow($, els, 'pane')}
-            {orgRow($, els)}
-            {orgMismatch() && (
-              <Box flexDirection="column">
-                <Text color={BRAND.danger}>
-                  This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
-                  connector, which writes to {orgMismatch()}.
-                </Text>
-                {orgId && (
-                  <Box gap={1}>
-                    <Button
-                      key="pane-org-fix"
-                      variant="primary"
-                      label={orgState === 'switching' ? 'Switching…' : `Use ${orgName} for both`}
-                      onPress={() => void switchOrg($, orgId as string)}
-                    />
-                  </Box>
-                )}
-              </Box>
-            )}
-            <Box gap={1}>
-              <Button
-                key="pane-learn"
-                variant="primary"
-                label={isSuggesting ? 'Reading the session…' : 'Suggest memories'}
-                onPress={() => suggest($, true)}
-              />
-              <Button key="pane-save-reply" label="Save last reply" onPress={() => saveLastReply($)} />
-            </Box>
-            <Text color={BRAND.grey}>
-              Suggest memories reads this session and proposes facts worth keeping. Nothing is saved until you press
-              Save.
             </Text>
           </Box>
+          <Text>
+            <Text color={BRAND.purple}>●</Text>
+            <Text color={BRAND.grey}> {saved} saved   </Text>
+            <Text color={BRAND.blue}>●</Text>
+            <Text color={BRAND.grey}> {recalled} recalled   </Text>
+            <Text color={BRAND.mint}>●</Text>
+            <Text color={BRAND.grey}> {rated} rated this session</Text>
+          </Text>
+        </Box>
+        {updateRow($, els, 'pane')}
+        {orgMismatch() && (
+          <Box flexDirection="column">
+            <Text color={BRAND.danger}>
+              This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
+              connector, which writes to {orgMismatch()}.
+            </Text>
+            {orgId && (
+              <Box gap={1}>
+                <Button
+                  key="pane-org-fix"
+                  variant="primary"
+                  label={orgState === 'switching' ? 'Switching…' : `Use ${orgName} for both`}
+                  onPress={() => void switchOrg($, orgId as string)}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
+        {orgRow($, els)}
+        <Box gap={1}>
+          <Button
+            key="pane-learn"
+            label={isSuggesting ? 'Reading the session…' : 'Suggest memories'}
+            onPress={() => suggest($, true)}
+          />
+          <Button key="pane-save-reply" label="Save last reply" onPress={() => saveLastReply($)} />
         </Box>
         {open.length > 0 && (
           <Box flexDirection="column" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
