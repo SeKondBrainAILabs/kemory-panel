@@ -5,6 +5,23 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.20.0]
+
+### Added
+- **A Workspace picker in the panel.** When your account belongs to more than
+  one organisation, the panel lists them and you pick the one Kemory reads and
+  writes. A pick moves both sides: the claude.ai connector (through the
+  account's stored selection, which every Kemory connector on the account
+  follows) and this plugin and its hooks (through `active_org_id` in the
+  credential file, as `kemory use` does). Both servers are then asked where
+  they write, and the panel shows their answer. A refused pick says why and
+  changes nothing. There is deliberately no tool for the model to switch: a
+  stored memory must not be able to redirect where later memories go.
+
+### Changed
+- The warning shown when the plugin and the connector write to different
+  organisations now points to the picker instead of `kemory use`.
+
 ## [0.19.0]
 
 ### Added
