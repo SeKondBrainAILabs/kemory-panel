@@ -492,7 +492,7 @@ test('a connector on another organisation is flagged, with the command to fix it
   expect(statuses.at(-1)).toContain('⚠ connector on SeKondBrain')
   const toast = toasts.find(t => t.includes('connector')) ?? ''
   expect(toast).toContain('the plugin writes to StressTest but the claude.ai connector writes to SeKondBrain')
-  expect(toast).toContain('Pick one under Workspace')
+  expect(toast).toContain('press "Use StressTest for both"')
   expect(toasts.filter(t => t.includes('connector writes to'))).toHaveLength(1)
   const ui = await $.ui.mount(PANE('desktop'))
   expect(await ui.find({ text: /Claude's own saves go through the claude\.ai/ })).toBeTruthy()
@@ -543,11 +543,11 @@ const ORGS = [
   { org_id: '7e80dc63-b955-48ec-bb1b-3de632990e52', name: 'StressTest' },
 ]
 
-function workspaces(on: On, refuse?: string) {
+function workspaces(on: On, refuse?: string, at = { plugin: ORGS[1], conn: ORGS[1] }) {
   const uses: string[] = []
   const toasts: string[] = []
-  let plugin = ORGS[1]
-  let conn = ORGS[1]
+  let plugin = at.plugin
+  let conn = at.conn
   mock.env(on, { HOME: '/home/k' })
   on('ui.status', () => answer())
   on('ui.toast', (_$, e) => {
@@ -607,3 +607,23 @@ test('a refused switch says why and leaves the workspace as it was', async ($, o
   expect(await ui.find({ text: 'Could not switch: you are not a member of that organisation.' })).toBeTruthy()
   expect(await ui.find({ text: / · StressTest/ })).toBeTruthy()
 })
+
+// The plugin already on SeKondBrain, the connector on StressTest: the
+// dropdown shows SeKondBrain, so picking it, or the warning's button, must
+// still bring the connector over.
+for (const how of ['select', 'button'] as const) {
+  test(`a mismatch is fixed from the panel by ${how === 'select' ? 'picking the shown workspace' : 'the warning button'}`, async ($, on) => {
+    const { uses } = workspaces(on, undefined, { plugin: ORGS[0], conn: ORGS[1] })
+    await start($, on)
+    await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+
+    const ui = await $.ui.mount(PANE('desktop'))
+    expect(await ui.find({ text: /connector, which writes to StressTest/ })).toBeTruthy()
+    if (how === 'select') await ui.select({ key: 'pane-org', value: ORGS[0].org_id } as never)
+    else await ui.press({ key: 'pane-org-fix' } as never)
+
+    expect(uses).toEqual([ORGS[0].org_id])
+    expect(await ui.find({ text: /connector, which writes to/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Button', text: /for both/ })).toBeUndefined()
+  })
+}

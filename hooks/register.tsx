@@ -220,7 +220,7 @@ async function warnOrgMismatch($: Engine) {
   toldOrgMismatch = true
   $.ui.toast(
     `Kemory: the plugin writes to ${orgName} but the claude.ai connector writes to ${other}. ` +
-      'Pick one under Workspace in /kemory-panel:memories to use it for both.',
+      `Open /kemory-panel:memories and press "Use ${orgName} for both", or pick another workspace there.`,
     { timeoutMs: 15000 },
   )
 }
@@ -246,8 +246,10 @@ async function loadOrgs($: Engine) {
 // could call would let a stored memory redirect where later memories go.
 // org.sh moves the connector (the account's stored selection) and the plugin
 // (the credential file); both servers are then asked where they now write.
+// Picking the plugin's own organisation still runs while the connector is on
+// another one: that pick is how the connector is brought over.
 async function switchOrg($: Engine, id: string) {
-  if (orgState === 'switching' || id === orgId) return
+  if (orgState === 'switching' || (id === orgId && !orgMismatch())) return
   orgState = 'switching'
   redraw($)
   const run = await $.process
@@ -1099,10 +1101,22 @@ export const register: Register = on => {
             {updateRow($, els, 'pane')}
             {orgRow($, els)}
             {orgMismatch() && (
-              <Text color={BRAND.danger}>
-                This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
-                connector, which writes to {orgMismatch()}. Pick one under Workspace to use it for both.
-              </Text>
+              <Box flexDirection="column">
+                <Text color={BRAND.danger}>
+                  This panel and the kemory hooks write to {orgName}, but Claude's own saves go through the claude.ai
+                  connector, which writes to {orgMismatch()}.
+                </Text>
+                {orgId && (
+                  <Box gap={1}>
+                    <Button
+                      key="pane-org-fix"
+                      variant="primary"
+                      label={orgState === 'switching' ? 'Switching…' : `Use ${orgName} for both`}
+                      onPress={() => void switchOrg($, orgId as string)}
+                    />
+                  </Box>
+                )}
+              </Box>
             )}
             <Box gap={1}>
               <Button
