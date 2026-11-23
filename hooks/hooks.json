@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/recall-approve.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/recall-approve.sh\"",
             "timeout": 5
           }
         ]

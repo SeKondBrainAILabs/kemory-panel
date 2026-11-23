@@ -36,6 +36,7 @@ fi
 
 echo "→ hooks reference existing scripts"
 while IFS= read -r s; do
+  s="${s//\"/}"
   s="${s/\$\{CLAUDE_PLUGIN_ROOT\}/.}"
   if [ -f "$s" ]; then echo "  ok   $s"; else echo "  FAIL missing $s"; fail=1; fi
 done < <(jq -r '.hooks[][].hooks[].command | select(contains("CLAUDE_PLUGIN_ROOT"))' hooks/hooks.json | awk '{print $1}')
