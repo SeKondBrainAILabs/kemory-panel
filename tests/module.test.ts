@@ -34,8 +34,43 @@ const BAND = (surface: (typeof SURFACES)[number]) =>
     },
   }) as const
 
-test('prompt recall shows in the band and counts on the status line', async ($, on) => {
+// What the app draws where the band hands off with next(e): nothing of Kemory's.
+function appDrawsNothing(on: On) {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e as never) as unknown as { Box: unknown }
+    return h(Box as never, null) as never
+  })
+}
+
+// A session with a strong repo brief: what puts rows in the band before the
+// first prompt.
+async function briefed($: Engine, on: On) {
   mock.env(on, {})
+  on('ui.status', () => answer())
+  on('ui.toast', () => answer())
+  on('tool.list', () => answer([]))
+  on('process.run', () => answer({ stdout: '200', stderr: '', code: 0 }))
+  on('session.root', () => answer('/Users/k/src/kemory-plugin'))
+  on('mcp.call', (_$, e) =>
+    answer(
+      e.tool === 'kemory_recall_memory'
+        ? recallOf([{ id: 'strong', ns: 'shared', text: 'Where does the kemory plugin live? In kemory-plugin.', score: 0.71 }])
+        : { content: [], isError: false },
+    ),
+  )
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
+  const clock = mock.clock(on)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+  await $.session.start({ cwd: '/Users/k/src/kemory-plugin', surface: 'desktop', isInteractive: true })
+  await clock.settle()
+}
+
+// Where Claude Code seats sec-default it skips a plugin's classic hooks and
+// says so on every prompt, so the module hooks none: a prompt's recall, which
+// only a classic.UserPromptSubmit hook could read, no longer reaches it.
+test("a prompt's recall stays out of the band and the status line", async ($, on) => {
+  mock.env(on, {})
+  appDrawsNothing(on)
   const statuses: (string | undefined)[] = []
   on('ui.status', (_$, e) => {
     statuses.push(e.text)
@@ -43,24 +78,35 @@ test('prompt recall shows in the band and counts on the status line', async ($, 
   })
   on('tool.list', () => answer([]))
   on('classic.UserPromptSubmit', () => ({ additionalContext: [RECALL_CONTEXT] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
 
   await $.classic.UserPromptSubmit({ prompt: 'where does the kemory plugin live?' })
+  await $.turn.start({ text: 'where does the kemory plugin live?', turnId: 't1' })
 
-  expect(statuses.at(-1)).toContain('2 recalled')
+  expect(statuses.some(t => t?.includes('2 recalled'))).toBe(false)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(BAND(surface))
-    expect((await ui.find({ text: /2 memories in context/ }))?.text).toBeTruthy()
-    expect((await ui.find({ text: /Where does the Claude Code plugin for kemory live\?/ }))?.text).toBeTruthy()
-    expect(await ui.find({ type: 'Text', text: 'USER:PREFERENCES' })).toBeTruthy()
+    expect(await ui.find({ text: /in context/ })).toBeUndefined()
+    expect(await ui.find({ text: /Claude Code plugin for kemory/ })).toBeUndefined()
+  }
+})
+
+test('a turn ends the repo brief in the band', async ($, on) => {
+  appDrawsNothing(on)
+  await briefed($, on)
+  for (const surface of SURFACES) {
+    expect(await (await $.ui.mount(BAND(surface))).find({ text: /knows this about/ })).toBeTruthy()
+  }
+
+  await $.turn.start({ text: 'anything', turnId: 't1' })
+
+  for (const surface of SURFACES) {
+    expect(await (await $.ui.mount(BAND(surface))).find({ text: /knows this about/ })).toBeUndefined()
   }
 })
 
 test('the band is drawn as a card: the theme frame and a vector mark on desktop', async ($, on) => {
-  mock.env(on, {})
-  on('ui.status', () => answer())
-  on('tool.list', () => answer([]))
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [RECALL_CONTEXT] }))
-  await $.classic.UserPromptSubmit({ prompt: 'where does the kemory plugin live?' })
+  await briefed($, on)
 
   type Node = { type: string; props?: Record<string, unknown>; children?: (Node | string)[] }
   // A fixed border colour or padding would override the desktop's own card
@@ -163,10 +209,10 @@ test("a live connector moves the plugin's duplicate tools behind tool search", a
   on('ui.status', () => answer())
   on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
   on('mcp.call', () => answer({ content: [{ type: 'text', text: '{"user":"k"}' }], isError: false }))
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
   on('tool.describe', (_$, e) => ({ description: e.description }))
 
-  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+  await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
   const described = await $.tool.describe({
     tool: 'mcp__plugin_kemory_kemory__kemory_recall_memory',
     description: 'Search memories.',
@@ -182,10 +228,10 @@ test('a connector that refuses the call leaves the plugin tools in front', async
   on('ui.status', () => answer())
   on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
   on('mcp.call', () => answer({ content: [{ type: 'text', text: 'disabled in your connector settings' }], isError: true }))
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
   on('tool.describe', (_$, e) => ({ description: e.description }))
 
-  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+  await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
   const described = await $.tool.describe({
     tool: 'mcp__plugin_kemory_kemory__kemory_recall_memory',
     description: 'Search memories.',
@@ -201,10 +247,10 @@ test('KEMORY_ALLOW_DUPLICATE=1 keeps both sets in front', async ($, on) => {
   on('ui.status', () => answer())
   on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
   on('mcp.call', () => answer({ content: [], isError: false }))
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
   on('tool.describe', (_$, e) => ({ description: e.description }))
 
-  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+  await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
   const described = await $.tool.describe({
     tool: 'mcp__plugin_kemory_kemory__kemory_recall_memory',
     description: 'Search memories.',
@@ -462,9 +508,9 @@ test('a live connector on the same organisation adds nothing to the panel or the
   })
   on('tool.list', () => answer([{ name: 'mcp__conn-1__kemory_whoami', description: '', mcp: true }]))
   on('mcp.call', () => answer({ content: [{ type: 'text', text: '{"user":"k"}' }], isError: false }))
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
 
-  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+  await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
 
   expect(statuses.some(t => t.includes('connector'))).toBe(false)
   for (const surface of SURFACES) {
@@ -609,7 +655,7 @@ function workspaces(on: On, refuse?: string, at = { plugin: ORGS[1], conn: ORGS[
     const o = e.server === 'conn-1' ? conn : plugin
     return answer({ content: [{ type: 'text', text: JSON.stringify({ org_id: o?.org_id, org_name: o?.name }) }], isError: false })
   })
-  on('classic.UserPromptSubmit', () => ({ additionalContext: [] }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }) as never)
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
 
   return { uses, toasts }
@@ -618,7 +664,7 @@ function workspaces(on: On, refuse?: string, at = { plugin: ORGS[1], conn: ORGS[
 test('the panel picks a workspace and both servers follow it', async ($, on) => {
   const { uses, toasts } = workspaces(on)
   await start($, on)
-  await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+  await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
 
   const ui = await $.ui.mount(PANE('desktop'))
   expect(await ui.find({ type: 'Select' })).toBeTruthy()
@@ -648,7 +694,7 @@ for (const how of ['select', 'button'] as const) {
   test(`a mismatch is fixed from the panel by ${how === 'select' ? 'picking the shown workspace' : 'the warning button'}`, async ($, on) => {
     const { uses } = workspaces(on, undefined, { plugin: ORGS[0], conn: ORGS[1] })
     await start($, on)
-    await $.classic.UserPromptSubmit({ prompt: 'anything long enough to recall' })
+    await $.turn.start({ text: 'anything long enough to recall', turnId: 't1' })
 
     const ui = await $.ui.mount(PANE('desktop'))
     expect(await ui.find({ text: /connector, which writes to StressTest/ })).toBeTruthy()

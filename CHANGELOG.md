@@ -5,6 +5,25 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.21.0]
+
+### Removed
+- **The band no longer lists the memories a prompt's recall put in context,
+  and the status line's recalled count no longer includes them.** Reading
+  them took a hook on Claude Code's `UserPromptSubmit` event. Where Claude Code
+  turns on its built-in security layer (`sec-default`: the desktop app,
+  managed and Team or Enterprise organisations), plugins may not see other
+  hooks' output, so it skipped the hook and printed "kemory-panel: its
+  classic.UserPromptSubmit hook was skipped" on every prompt. The hook is
+  gone, and so is the notice. Recall itself is unchanged, and the kemory
+  plugin still shows "Kemory · recalled N memories". Recall tool calls still
+  count on the status line and get their cards.
+
+### Fixed
+- The repo brief leaves the band at the first turn in every app, and the
+  claude.ai connector is still looked for again on the first prompts. Both
+  now hang on the start of a turn instead of the removed hook.
+
 ## [0.20.3]
 
 ### Fixed
