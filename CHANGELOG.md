@@ -5,6 +5,25 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.20.3]
+
+### Fixed
+- The read-only auto-approval works in Claude desktop. Desktop installs
+  plugins under `~/Library/Application Support/`, and the hook's command split
+  at the space, so every Kemory read asked for permission. The command now
+  quotes the plugin's path.
+
+### Changed
+- **The band above the prompt looks like Kemory's cards.** One line with the
+  Kemory mark, the name and a muted detail, Open and a close control at its
+  end, and each memory's namespace in small muted capitals beside its title.
+  On desktop the band takes the app's own hairline border, radius and padding
+  instead of a fixed dark border. An update reads as a status: a small dot,
+  "Updated." and what to do next in muted text, on the band's one line when
+  there is nothing else to show.
+- The Kemory mark is drawn from vector paths. The desktop app drops bitmap
+  images inside an SVG, so the mark in the panel drew nothing there.
+
 ## [0.20.2]
 
 ### Changed
