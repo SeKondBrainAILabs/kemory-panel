@@ -36,25 +36,30 @@ fi
 
 echo "→ hooks reference existing scripts"
 while IFS= read -r s; do
+  s="${s//\"/}"
   s="${s/\$\{CLAUDE_PLUGIN_ROOT\}/.}"
   if [ -f "$s" ]; then echo "  ok   $s"; else echo "  FAIL missing $s"; fail=1; fi
 done < <(jq -r '.hooks[][].hooks[].command | select(contains("CLAUDE_PLUGIN_ROOT"))' hooks/hooks.json | awk '{print $1}')
 
 # The status check sources this copy of lib.sh, since an installed plugin
-# cannot reach the kemory plugin's files. A drifted copy would check a
-# different credential than kemory's hooks use. KEMORY_LIB_URL points it at
-# another branch while both change together.
-echo "→ scripts/lib.sh matches the kemory plugin's"
-lib_url=${KEMORY_LIB_URL:-https://raw.githubusercontent.com/SeKondBrainAILabs/kemory-plugin/main/plugin/scripts/lib.sh}
-if upstream=$(curl -fsSL --max-time 20 "$lib_url" 2>/dev/null); then
-  if [ "$upstream" == "$(cat scripts/lib.sh)" ]; then
-    echo "  ok   $lib_url"
+# cannot reach the kemory plugin's files. lib.sh runs kemory_creds.py and
+# kemory_lib.py from its own folder, so the three are copied together. A
+# drifted copy would check a different credential than kemory's hooks use.
+# KEMORY_LIB_URL points it at another branch's plugin/scripts while both change
+# together.
+echo "→ scripts/lib.sh and its programs match the kemory plugin's"
+lib_url=${KEMORY_LIB_URL:-https://raw.githubusercontent.com/SeKondBrainAILabs/kemory-plugin/main/plugin/scripts}
+for f in lib.sh kemory_creds.py kemory_lib.py; do
+  if upstream=$(curl -fsSL --max-time 20 "$lib_url/$f" 2>/dev/null); then
+    if [ "$upstream" == "$(cat "scripts/$f")" ]; then
+      echo "  ok   $lib_url/$f"
+    else
+      echo "  FAIL scripts/$f differs from $lib_url/$f — copy it over"; fail=1
+    fi
   else
-    echo "  FAIL scripts/lib.sh differs from $lib_url — copy it over"; fail=1
+    echo "  FAIL could not fetch $lib_url/$f"; fail=1
   fi
-else
-  echo "  FAIL could not fetch $lib_url"; fail=1
-fi
+done
 
 # This repo is public, and release.yml copies CHANGELOG.md into a published
 # GitHub release. Catch internal tracker ids and Notion links before then.

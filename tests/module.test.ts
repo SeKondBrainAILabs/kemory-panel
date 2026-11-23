@@ -51,7 +51,39 @@ test('prompt recall shows in the band and counts on the status line', async ($, 
     const ui = await $.ui.mount(BAND(surface))
     expect((await ui.find({ text: /2 memories in context/ }))?.text).toBeTruthy()
     expect((await ui.find({ text: /Where does the Claude Code plugin for kemory live\?/ }))?.text).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: 'USER:PREFERENCES' })).toBeTruthy()
   }
+})
+
+test('the band is drawn as a card: the theme frame and a vector mark on desktop', async ($, on) => {
+  mock.env(on, {})
+  on('ui.status', () => answer())
+  on('tool.list', () => answer([]))
+  on('classic.UserPromptSubmit', () => ({ additionalContext: [RECALL_CONTEXT] }))
+  await $.classic.UserPromptSubmit({ prompt: 'where does the kemory plugin live?' })
+
+  type Node = { type: string; props?: Record<string, unknown>; children?: (Node | string)[] }
+  // A fixed border colour or padding would override the desktop's own card
+  // frame; the terminal needs both, or its border is drawn at full strength.
+  const desktop = (await (await $.ui.mount(BAND('desktop'))).drawn()) as unknown as Node
+  expect(desktop.props?.borderStyle).toBe('round')
+  expect(desktop.props?.borderColor).toBeUndefined()
+  expect(desktop.props?.paddingX).toBeUndefined()
+  const terminal = (await (await $.ui.mount(BAND('terminal'))).drawn()) as unknown as Node
+  expect(terminal.props?.borderColor).toBeTruthy()
+  expect(terminal.props?.paddingX).toBe(1)
+
+  // A desktop's Svg drops <image>, so the mark must be paths.
+  const svgs: Node[] = []
+  const walk = (n: Node | string) => {
+    if (typeof n === 'string') return
+    if (n.type === 'Svg') svgs.push(n)
+    for (const c of n.children ?? []) walk(c)
+  }
+  walk(desktop)
+  expect(svgs).toHaveLength(1)
+  expect(String(svgs[0]?.props?.source)).toContain('<path')
+  expect(String(svgs[0]?.props?.source)).not.toContain('<image')
 })
 
 test('a store call becomes a card in the terminal and a toast everywhere', async ($, on) => {
@@ -514,7 +546,8 @@ test('the band offers an Update button that runs the update and says to open a n
     ['plugin', 'marketplace', 'update', 'kemory'],
     ['plugin', 'update', 'kemory@kemory'],
   ])
-  expect(await band.find({ text: 'Updated. Open a new session to use it.' })).toBeTruthy()
+  expect(await band.find({ text: 'Updated.' })).toBeTruthy()
+  expect(await band.find({ text: 'Open a new session to use it.' })).toBeTruthy()
   expect(await band.find({ type: 'Button', text: 'Update' })).toBeUndefined()
 })
 

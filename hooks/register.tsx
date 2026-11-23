@@ -1,5 +1,5 @@
 import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
-import { LOGOMARK_PNG } from './logomark'
+import { LOGOMARK_PATHS } from './logomark'
 
 // Kemory inside Claude Code, loaded by 2.1.267 and later through the "modules"
 // key in hooks.json. Older Claude Code builds and Grok ignore that key and run
@@ -478,30 +478,54 @@ async function runUpdate($: Engine) {
   redraw($)
 }
 
+// What an update is doing, worded as the Kemory cards word a status: a small
+// dot in the state's colour, the state in full ink, what to do next in muted
+// ink, then the one action. Returned as parts, so the band can put them on its
+// own line when it has nothing else to say.
+// biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
+function updateParts($: Engine, els: Record<string, any>, at: string) {
+  const { Button, Text } = els
+  if (updateState === 'idle' && pending.length === 0) return null
+  const [dot, lead, rest] = {
+    idle: [BRAND.yellow, `${pendingNotice.charAt(0).toUpperCase()}${pendingNotice.slice(1)}.`, ''],
+    running: [BRAND.yellow, 'Updating…', ''],
+    done: [BRAND.mint, 'Updated.', 'Open a new session to use it.'],
+    failed: [BRAND.danger, updateNote, ''],
+  }[updateState]
+
+  return [
+    <Text key={`update-dot-${at}`} size="caption" color={dot}>
+      ●
+    </Text>,
+    <Text key={`update-lead-${at}`} weight={updateState === 'done' ? 'semibold' : undefined}>
+      {lead}
+    </Text>,
+    rest && (
+      <Text key={`update-rest-${at}`} dimColor>
+        {rest}
+      </Text>
+    ),
+    (updateState === 'idle' || updateState === 'failed') && pending.length > 0 && (
+      <Button
+        key={`update-run-${at}`}
+        label={pending.some(a => a.verb === 'install') ? 'Install' : 'Update'}
+        variant="primary"
+        onPress={() => void runUpdate($)}
+      />
+    ),
+  ]
+}
+
 // One row saying an update is out, with the button, or how pressing it went.
 // biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
 function updateRow($: Engine, els: Record<string, any>, at: string) {
-  const { Box, Button, Text } = els
-  if (updateState === 'idle' && pending.length === 0) return null
-  const text = {
-    idle: `${pendingNotice.charAt(0).toUpperCase()}${pendingNotice.slice(1)}.`,
-    running: 'Updating…',
-    done: 'Updated. Open a new session to use it.',
-    failed: updateNote,
-  }[updateState]
+  const { Box } = els
+  const parts = updateParts($, els, at)
+  if (!parts) return null
 
   return (
-    <Box key={`update-${at}`} gap={1}>
-      <Text color={updateState === 'failed' ? BRAND.danger : BRAND.yellow}>●</Text>
-      <Text>{text}</Text>
-      {(updateState === 'idle' || updateState === 'failed') && pending.length > 0 && (
-        <Button
-          key={`update-run-${at}`}
-          label={pending.some(a => a.verb === 'install') ? 'Install' : 'Update'}
-          variant="primary"
-          onPress={() => void runUpdate($)}
-        />
-      )}
+    <Box key={`update-${at}`} gap={1} alignItems="center">
+      {parts}
     </Box>
   )
 }
@@ -791,8 +815,8 @@ function previewOf(e: Entry): string {
 // The SeKondBrain mark, drawn where the surface takes SVG.
 function logomark(size: number): string {
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 96 96">` +
-    `<image href="data:image/png;base64,${LOGOMARK_PNG}" width="96" height="96"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1180 1180" fill="none">` +
+    `${LOGOMARK_PATHS}</svg>`
   )
 }
 
@@ -999,46 +1023,78 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   // Above the prompt: the repo brief until the first prompt, then what each
-  // prompt's recall put in context, as a row of namespace chips and titles.
+  // prompt's recall put in context, one title per row under its namespace.
+  // Drawn as the Kemory server's cards are: one line with the mark, the name
+  // and a muted detail, the actions at its end, rows below it. Where the band
+  // has only an update to tell, the update is the line's detail.
   on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
     if (e.props.hasSurvey || isBandHidden) return next(e)
     const els = $.ui.resolve(e)
     const { Box, Button, Text } = els
+    // The terminal's table has an Svg too, which draws an empty Box: ask the
+    // surface, not the table.
+    const isTerminal = e.surface === 'terminal'
+    const svg = isTerminal ? undefined : (els as unknown as { Svg?: (p: Record<string, unknown>) => never }).Svg
     const briefs = entries.filter(m => m.kind === 'brief')
     const shown = hasPrompted ? inContext.map(find).filter((x): x is Entry => !!x) : briefs
-    const update = updateRow($, els, 'band')
+    const update = updateParts($, els, 'band')
     if (shown.length === 0 && !update) return next(e)
     const noun = shown.length === 1 ? 'memory' : 'memories'
-    const heading =
-      shown.length === 0 ? '' : hasPrompted ? `${shown.length} ${noun} in context` : `knows this about ${repoName}`
+    const detail = hasPrompted ? `${shown.length} ${noun} in context` : `knows this about ${repoName}`
     const more = shown.length - BAND_ROWS
+    // A desktop draws a bordered Box as a card: the theme's hairline, its
+    // radius and its padding. A fixed colour or padding would override them,
+    // so only the terminal, whose border is otherwise full-strength, sets them.
+    const frame = isTerminal ? { borderColor: BRAND.hairline, paddingX: 1 } : {}
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={BRAND.hairline} paddingX={1}>
-        <Box gap={1}>
-          <Text color={ACCENT} bold>
-            Kemory
-          </Text>
-          <Text dimColor>{heading}</Text>
-          <Button key="band-open" label="Open" dimColor onPress={() => $.ui.open({ id: PANE, title: 'Kemory' })} />
-          <Button
-            key="band-hide"
-            label="Hide"
-            dimColor
-            onPress={() => {
-              isBandHidden = true
-              $.ui.invalidate('ui.render')
-            }}
-          />
+      <Box flexDirection="column" borderStyle="round" {...frame}>
+        <Box gap={1} justifyContent="space-between" alignItems="center">
+          <Box gap={1} alignItems="center" flexShrink={1}>
+            {svg ? svg({ key: 'band-mark', source: logomark(16), alt: 'Kemory', width: 16, height: 16 }) : null}
+            <Text weight="semibold" color={svg ? undefined : ACCENT}>
+              Kemory
+            </Text>
+            {shown.length > 0 ? (
+              <Text dimColor wrap="truncate-end">
+                {detail}
+              </Text>
+            ) : (
+              update
+            )}
+          </Box>
+          <Box gap={1} alignItems="center">
+            <Button key="band-open" label="Open" dimColor onPress={() => $.ui.open({ id: PANE, title: 'Kemory' })} />
+            <Button
+              key="band-hide"
+              label="Hide"
+              role="dismiss"
+              dimColor
+              onPress={() => {
+                isBandHidden = true
+                $.ui.invalidate('ui.render')
+              }}
+            />
+          </Box>
         </Box>
-        {update}
         {shown.slice(0, BAND_ROWS).map(m => (
-          <Box key={`band-${m.key}`} gap={1}>
-            {tag(Text, m.namespace)}
+          <Box key={`band-${m.key}`} gap={1} alignItems="center">
+            <Text size="caption" mono dimColor>
+              {(m.namespace || 'kemory').toUpperCase()}
+            </Text>
             <Text wrap="truncate-end">{m.title}</Text>
           </Box>
         ))}
-        {more > 0 && <Text dimColor>+{more} more in the panel</Text>}
+        {more > 0 && (
+          <Text size="footnote" dimColor>
+            +{more} more in the panel
+          </Text>
+        )}
+        {shown.length > 0 && update && (
+          <Box key="band-update" gap={1} alignItems="center">
+            {update}
+          </Box>
+        )}
       </Box>
     )
   })

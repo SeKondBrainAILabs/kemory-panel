@@ -37,6 +37,26 @@ class RecallApproveTest(unittest.TestCase):
             for hook in group["hooks"]:
                 self.assertNotEqual(hook.get("async"), True)
 
+    def test_command_survives_a_plugin_root_with_a_space(self):
+        # Claude desktop installs plugins under ~/Library/Application Support/.
+        # The host substitutes the root into the command text and runs it with
+        # /bin/sh, so an unquoted root splits at the space and the hook exits 127.
+        root = pathlib.Path(self.home) / "Application Support" / "kemory-panel"
+        shutil.copytree(SCRIPTS, root / "scripts")
+        groups = json.loads(HOOKS.read_text())["hooks"]["PreToolUse"]
+        commands = [h["command"] for g in groups for h in g["hooks"]]
+        self.assertTrue(commands)
+        payload = json.dumps({"session_id": "s", "hook_event_name": "PreToolUse",
+                              "tool_name": "mcp__plugin_kemory_kemory__kemory_recall",
+                              "tool_input": {}})
+        for command in commands:
+            with self.subTest(command=command):
+                line = command.replace("${CLAUDE_PLUGIN_ROOT}", str(root))
+                r = subprocess.run(["/bin/sh", "-c", line], input=payload, text=True,
+                                   capture_output=True, env=self.env(), timeout=10)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self._decision(r.stdout), "allow")
+
     def test_matcher_covers_claude_code_and_grok_names(self):
         rx = re.compile(json.loads(HOOKS.read_text())["hooks"]["PreToolUse"][0]["matcher"])
         for name in ("mcp__plugin_kemory_kemory__kemory_recall_memory",

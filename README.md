@@ -104,7 +104,8 @@ vulnerability.
 
 It validates the manifests and the module, runs the module tests
 (`claude plugin test .`) and the approval hook tests, and checks
-`scripts/lib.sh` against the kemory plugin's copy on `main`. See
+`scripts/lib.sh` and the two programs it runs against the kemory plugin's
+copies on `main`. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Path | What it is |
@@ -112,6 +113,7 @@ It validates the manifests and the module, runs the module tests
 | `hooks/register.tsx` | The interface: status line, band, cards, panel and commands |
 | `scripts/recall-approve.sh` | Approves read-only Kemory tools by exact name |
 | `scripts/lib.sh` | A copy of the kemory plugin's credential resolution, for the status check |
+| `scripts/kemory_creds.py`, `scripts/kemory_lib.py` | The programs `lib.sh` runs, copied with it |
 | `tests/` | Module tests and approval hook tests |
 
 ## License
