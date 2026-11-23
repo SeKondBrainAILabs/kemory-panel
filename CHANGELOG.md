@@ -12,6 +12,9 @@ kemory marketplace: `/plugin install kemory-plus@kemory`.
   plugins under `~/Library/Application Support/`, and the hook's command split
   at the space, so every Kemory read asked for permission. The command now
   quotes the plugin's path.
+- `scripts/lib.sh` matches the kemory plugin's copy again. Its credential
+  resolution now runs from `scripts/kemory_creds.py` and `scripts/kemory_lib.py`,
+  which ship beside it, and the check compares all three.
 
 ### Changed
 - **The band above the prompt looks like Kemory's cards.** One line with the

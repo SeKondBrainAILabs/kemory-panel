@@ -24,7 +24,8 @@ Thanks for helping improve kemory-panel. By taking part you agree to the
 It validates the manifests and the module (`claude plugin validate .`), runs
 the module tests (`claude plugin test .`, Claude Code 2.1.267 or later) and
 the approval hook tests (`python3 tests/test_recall_approve.py`), and checks
-`scripts/lib.sh` against the kemory plugin's copy on `main`. CI runs the same
+`scripts/lib.sh` and the two programs it runs against the kemory plugin's
+copies on `main`. CI runs the same
 script.
 
 ## Releasing
