@@ -10,8 +10,8 @@ import { LOGOMARK_PATHS } from './logomark'
 // sources the plugin's own lib.sh, so the credential it checks, token refresh
 // included, is the one the hooks use.
 //
-// The rest puts memory where a person can act on it: a brief for the repo and
-// the memories in context above the prompt, a card on each save and recall in
+// The rest puts memory where a person can act on it: a brief for the repo
+// above the prompt until the first turn, a card on each save and recall in
 // the transcript, a panel listing them with Helpful, Outdated and Delete, saving
 // a note or the last reply, and suggested memories when the session goes quiet.
 
@@ -27,7 +27,6 @@ const RECALL_TOOL = /^mcp__.*__kemory_(recall.*|ask|get_context|find_similar)$/
 const STORE_TOOL = /^mcp__.*__kemory_store_(memory|skill)$/
 // prompt-recall.sh lists each injected memory as one line,
 // "- [<namespace>] <content>", then "  (memory_id: <uuid>)" on the next.
-const INJECTED = /^- (?:\[([^\]\n]+)\] )?(.+)\n {2}\(memory_id: ([0-9a-f-]{36})\)$/gm
 const BAND_ROWS = 3
 const PANE = 'kemory-memories'
 // The plugin's own MCP server, which the panel's actions go through.
@@ -125,8 +124,6 @@ let updateNote = ''
 const entries: Entry[] = []
 const byCall = new Map<string, string[]>()
 const isOpen = new Set<string>()
-// What the last prompt's recall put in front of the model, for the band.
-let inContext: string[] = []
 let isBandHidden = false
 let hasPrompted = false
 let repoName = ''
@@ -968,25 +965,21 @@ export const register: Register = on => {
     return result
   })
 
-  // A display must never cost the prompt or the tool call it watches: if a
-  // hook below throws, its catch hands back what `next` settled to (replayed,
-  // never run twice).
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    const result = await next(e)
+  // A turn of the main loop ends the repo brief and gives the connector
+  // another look. Marked here as well as at prompt.submit, which a session
+  // hosted by the desktop app was seen not to raise. Not classic.UserPromptSubmit:
+  // where Claude Code seats sec-default (the desktop app, managed organizations)
+  // it hides settings hooks' output from plugins, skips that hook and says so on
+  // every prompt.
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
     if (!connector && connectorChecks < CONNECTOR_PROMPT_CHECKS) await findConnector($)
-    // A prompt ends the repo brief. Marked here as well as at prompt.submit,
-    // which a session hosted by the desktop app was seen not to raise.
-    hasPrompted = true
-    inContext = []
-    for (const context of result.additionalContext ?? []) {
-      for (const [, namespace = '', content, id] of context.matchAll(INJECTED)) {
-        if (!content || !id) continue
-        inContext.push(add({ key: id, id, kind: 'recalled', namespace, title: titleOf(content), text: content }))
-      }
+    if (!hasPrompted) {
+      hasPrompted = true
+      redraw($)
     }
-    redraw($)
 
-    return result
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('tool.call', async ($, e, next) => {
@@ -1022,8 +1015,8 @@ export const register: Register = on => {
     }
   }).catch(($, e, next) => next(e))
 
-  // Above the prompt: the repo brief until the first prompt, then what each
-  // prompt's recall put in context, one title per row under its namespace.
+  // Above the prompt: the repo brief until the first turn, one title per row
+  // under its namespace, and an update when one is out.
   // Drawn as the Kemory server's cards are: one line with the mark, the name
   // and a muted detail, the actions at its end, rows below it. Where the band
   // has only an update to tell, the update is the line's detail.
@@ -1036,11 +1029,10 @@ export const register: Register = on => {
     const isTerminal = e.surface === 'terminal'
     const svg = isTerminal ? undefined : (els as unknown as { Svg?: (p: Record<string, unknown>) => never }).Svg
     const briefs = entries.filter(m => m.kind === 'brief')
-    const shown = hasPrompted ? inContext.map(find).filter((x): x is Entry => !!x) : briefs
+    const shown = hasPrompted ? [] : briefs
     const update = updateParts($, els, 'band')
     if (shown.length === 0 && !update) return next(e)
-    const noun = shown.length === 1 ? 'memory' : 'memories'
-    const detail = hasPrompted ? `${shown.length} ${noun} in context` : `knows this about ${repoName}`
+    const detail = `knows this about ${repoName}`
     const more = shown.length - BAND_ROWS
     // A desktop draws a bordered Box as a card: the theme's hairline, its
     // radius and its padding. A fixed colour or padding would override them,
