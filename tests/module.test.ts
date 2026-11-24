@@ -204,6 +204,18 @@ test('a store call becomes a card in the terminal and adds no toast beside the c
     expect(await ui.find({ type: 'Button', text: 'Show less' })).toBeTruthy()
     await ui.press({ key: `open-${callId}-abc-123` } as never)
   }
+
+  // The panel rates and deletes in the terminal only: elsewhere the Kemory
+  // server's cards do that, and two sets of actions on one memory conflict.
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount(PANE(surface))
+    await pane.press({ key: 'open-pane-abc-123' } as never)
+    expect(await pane.find({ type: 'Markdown' })).toBeTruthy()
+    const actions = await pane.findAll({ type: 'Button', text: /^(Helpful|Outdated|Delete)$/ })
+    expect(actions.length > 0).toBe(surface === 'terminal')
+    expect(!!(await pane.find({ text: /rated this session/ }))).toBe(surface === 'terminal')
+    await pane.press({ key: 'open-pane-abc-123' } as never)
+  }
 })
 
 test("a live connector moves the plugin's duplicate tools behind tool search", async ($, on) => {

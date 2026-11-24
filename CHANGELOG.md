@@ -5,6 +5,17 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.21.2]
+
+### Changed
+- **The panel leaves rating and deleting to Kemory's cards outside the
+  terminal.** In Claude desktop the Kemory server's card for each save and
+  recall already offers Undo, Forget and a rating, so the panel's Helpful,
+  Outdated and Delete on the same memory were a second set of controls. The
+  panel there lists the session's memories and opens them in Kemory; the
+  terminal, which cannot show those cards, keeps the panel's actions. The
+  "rated this session" count shows in the terminal only.
+
 ## [0.21.1]
 
 ### Changed

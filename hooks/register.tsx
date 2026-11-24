@@ -12,7 +12,8 @@ import { LOGOMARK_PATHS } from './logomark'
 //
 // The rest puts memory where a person can act on it: a brief for the repo
 // above the prompt until the first turn, a card on each save and recall in
-// the transcript, a panel listing them with Helpful, Outdated and Delete, saving
+// the transcript, a panel listing them (with Helpful, Outdated and Delete in the
+// terminal; elsewhere the Kemory server's cards hold those), saving
 // a note or the last reply, and suggested memories when the session goes quiet.
 
 // Each plugin is checked against its own repository. They version
@@ -829,10 +830,12 @@ function tag(Text: any, namespace: string) {
 }
 
 // One memory as a card. Closed: what happened and where, the title, and one
-// line of the memory. Open: the whole memory as Markdown and its actions.
+// line of the memory. Open: the whole memory as Markdown and, with canAct, its
+// actions. Off the terminal the Kemory server's own cards rate, undo and forget
+// a memory, so the panel there only shows it.
 // Elements are the drawing surface's own, passed in by the hook.
 // biome-ignore lint/suspicious/noExplicitAny: the element table differs per surface
-function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
+function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string, canAct: boolean) {
   const { Box, Button, Text, Markdown, Link } = els
   const svg = 'Svg' in els ? (els.Svg as (p: Record<string, unknown>) => never) : undefined
   const isShown = isOpen.has(m.key) && !m.isDeleted
@@ -878,21 +881,21 @@ function memoryCard($: Engine, els: Record<string, any>, m: Entry, at: string) {
             onPress={() => toggle($, m.key)}
           />
         )}
-        {isShown && m.id && m.kind !== 'saved' && m.kind !== 'updated' && (
+        {canAct && isShown && m.id && m.kind !== 'saved' && m.kind !== 'updated' && (
           <Button
             key={`up-${at}-${m.key}`}
             label={m.rating === 'up' ? '✓ Helpful' : 'Helpful'}
             onPress={() => rate($, m.key, 'up')}
           />
         )}
-        {isShown && m.id && (
+        {canAct && isShown && m.id && (
           <Button
             key={`down-${at}-${m.key}`}
             label={m.rating === 'down' ? '✓ Outdated' : 'Outdated'}
             onPress={() => rate($, m.key, 'down')}
           />
         )}
-        {isShown && m.id && (
+        {canAct && isShown && m.id && (
           <Button
             key={`del-${at}-${m.key}`}
             label={m.isConfirmingDelete ? 'Confirm delete' : 'Delete'}
@@ -1114,7 +1117,7 @@ export const register: Register = on => {
     const { Box } = els
     const shown = keys.map(find).filter((x): x is Entry => !!x)
 
-    return <Box flexDirection="column">{shown.map(m => memoryCard($, els, m, e.props.tool_use_id))}</Box>
+    return <Box flexDirection="column">{shown.map(m => memoryCard($, els, m, e.props.tool_use_id, true))}</Box>
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, ($, e) => {
@@ -1125,6 +1128,7 @@ export const register: Register = on => {
     const rated = entries.filter(m => m.rating).length
     const open = suggestions.filter(s => s.state !== 'skipped')
     const svg = 'Svg' in els ? (els as unknown as { Svg: (p: Record<string, unknown>) => never }).Svg : undefined
+    const canAct = e.surface === 'terminal'
 
     // Plain sections, full width: a small mark beside the title rather than a
     // column of its own, one hint line where one is needed, and the primary
@@ -1143,9 +1147,9 @@ export const register: Register = on => {
             <Text color={BRAND.purple}>●</Text>
             <Text color={BRAND.grey}> {saved} saved   </Text>
             <Text color={BRAND.blue}>●</Text>
-            <Text color={BRAND.grey}> {recalled} recalled   </Text>
-            <Text color={BRAND.mint}>●</Text>
-            <Text color={BRAND.grey}> {rated} rated this session</Text>
+            <Text color={BRAND.grey}> {recalled} recalled{canAct ? '   ' : ' this session'}</Text>
+            {canAct && <Text color={BRAND.mint}>●</Text>}
+            {canAct && <Text color={BRAND.grey}> {rated} rated this session</Text>}
           </Text>
         </Box>
         {updateRow($, els, 'pane')}
@@ -1205,7 +1209,7 @@ export const register: Register = on => {
           </Box>
         )}
         {entries.length === 0 && <Text dimColor>Nothing saved or recalled yet.</Text>}
-        {[...entries].reverse().map(m => memoryCard($, els, m, 'pane'))}
+        {[...entries].reverse().map(m => memoryCard($, els, m, 'pane', canAct))}
       </Box>
     )
   })
