@@ -14,7 +14,7 @@ capture. kemory-panel uses that plugin's server and credential.
 | Status line | `✓ SeKondBrain · 3 recalled · 1 saved`: the organisation you write to and this session's counts. Otherwise what is wrong (no credential, token expired, API unreachable), `⚠ connector on <name>` when the claude.ai connector writes to a different organisation, and `↑ kemory 0.15.3` when an update is out. The band above the prompt and the panel then offer an **Update** button |
 | Above the prompt | Before the first prompt, what Kemory already knows about the folder you opened, each memory with its namespace. An **Update** button when an update is out |
 | Transcript (terminal) | A card for each save and recall, which opens to the full memory. Elsewhere the Kemory server's own cards show these; see [Memory cards and this panel](#memory-cards-and-this-panel) |
-| `/kemory-panel:memories` | A panel with this session's memories. Rate one Helpful or Outdated, delete it, or open it in Kemory. **Suggest memories** proposes facts from the session worth keeping, and **Save last reply** keeps Claude's last answer |
+| `/kemory-panel:memories` | A panel with this session's memories. Open one in Kemory, and in the terminal rate it Helpful or Outdated or delete it (in the desktop app the Kemory server's cards do that). **Suggest memories** proposes facts from the session worth keeping, and **Save last reply** keeps Claude's last answer |
 | Permission prompts | Read-only Kemory tools (recall, search, list) run without asking. Every write still asks |
 | Duplicate tools | When the claude.ai Kemory connector is also connected, this plugin's copies of the same tools move behind tool search, so each request carries one set |
 
