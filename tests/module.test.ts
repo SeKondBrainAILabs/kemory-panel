@@ -132,7 +132,7 @@ test('the band is drawn as a card: the theme frame and a vector mark on desktop'
   expect(String(svgs[0]?.props?.source)).not.toContain('<image')
 })
 
-test('a store call becomes a card in the terminal and a toast everywhere', async ($, on) => {
+test('a store call becomes a card in the terminal and adds no toast beside the card', async ($, on) => {
   mock.env(on, {})
   // What the app draws for the row when no plugin answers it.
   on('ui.render', ($, e) => {
@@ -157,7 +157,9 @@ test('a store call becomes a card in the terminal and a toast everywhere', async
   const content = 'Why does the band show nothing on a short prompt? Short prompts need 0.65 similarity.'
   await $.tool.call({ tool: 'mcp__plugin_kemory_kemory__kemory_store_memory', content, namespace: 'shared' })
 
-  expect(toasts.at(-1)).toBe('Saved to shared: "Why does the band show nothing on a short prompt?"')
+  // The save has its card: the Kemory server's on desktop, this plugin's in
+  // the terminal. A toast would say the same thing a second time.
+  expect(toasts).toEqual([])
   // On desktop the Kemory server's own MCP App card shows the save; the plugin
   // leaves the row to the app.
   const row = (surface: (typeof SURFACES)[number]) =>

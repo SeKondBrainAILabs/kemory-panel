@@ -102,7 +102,8 @@ class RecallApproveTest(unittest.TestCase):
                            input=json.dumps(fixture), text=True,
                            capture_output=True, env=self.env())
         self.assertEqual(self._decision(r.stdout), "allow")
-        self.assertIn("hybrid search", json.loads(r.stdout)["systemMessage"])
+        # No transcript line: the recall's card says what was searched.
+        self.assertNotIn("systemMessage", json.loads(r.stdout))
 
     def test_approve_allows_every_read_only_tool(self):
         for prefix in ("kemory", "s9nmem"):
