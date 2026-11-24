@@ -81,15 +81,10 @@ tool = match.group(1) if match else None
 if not tool or tool not in READ_ONLY:
     passthrough()
 
-query = (hook.get("tool_input") or {}).get("query")
-message = (
-    f"Kemory · recalling: {query}"
-    if isinstance(query, str) and query.strip()
-    else "Kemory · reading memory"
-)
-
+# Only the decision. A line such as "Kemory · recalling: <query>" would sit
+# beside the recall's own card (the Kemory server's on desktop, this plugin's
+# in the terminal), which already says what was searched.
 print(json.dumps({
-    "systemMessage": message,
     "hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "allow",

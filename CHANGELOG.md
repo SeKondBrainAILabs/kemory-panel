@@ -5,6 +5,18 @@ This plugin was called `kemory-plus` up to 0.14.1. It moved here from the `plus/
 changelog holds its history up to 0.12.0. It is still installed from the
 kemory marketplace: `/plugin install kemory-plus@kemory`.
 
+## [0.21.1]
+
+### Changed
+- **Nothing beside a Kemory card.** A save the model makes no longer raises
+  a "Saved to …" toast, and a read the panel approves no longer adds a
+  "Kemory · recalling: …" line to the transcript. Each save and recall already
+  has its card: the Kemory server's in Claude desktop and other apps that
+  show MCP App cards, this plugin's in the terminal. Read-only tools still run
+  without a permission prompt, and a save made from the panel
+  (`/kemory-panel:remember`, a suggested memory) still says so in a toast,
+  since it has no card.
+
 ## [0.21.0]
 
 ### Removed

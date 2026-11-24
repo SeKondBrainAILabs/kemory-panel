@@ -991,8 +991,9 @@ export const register: Register = on => {
     if (STORE_TOOL.test(e.tool)) {
       const content = [input.content, input.name, input.trigger].find(v => typeof v === 'string') as string | undefined
       const entry = stored(text, content ?? '', e.tool_use_id, String(input.namespace ?? ''))
+      // No toast: the save already has its card, the Kemory server's on
+      // desktop and this plugin's in the terminal.
       byCall.set(e.tool_use_id, [add(entry)])
-      $.ui.toast(saveNotice(entry), { timeoutMs: 6000 })
     } else if (RECALL_TOOL.test(e.tool)) {
       const keys = memoriesIn(text).map(m =>
         add({ key: m.id, id: m.id, kind: 'recalled', namespace: m.namespace, title: titleOf(m.content), text: m.content }),

@@ -31,7 +31,9 @@ plugin.
 | Where it shows | Apps that support MCP Apps, such as Claude desktop, claude.ai and ChatGPT | Claude Code, terminal and desktop |
 
 So one save shows one card: the server's card where the app can show it, and
-this plugin's card in the Claude Code terminal, which cannot.
+this plugin's card in the Claude Code terminal, which cannot. The plugin adds
+nothing beside a card: no toast for a save, and no transcript line for a read
+it approves.
 
 ## Requirements
 
